@@ -3,11 +3,15 @@ on:
   push:
     branches: [main, master]
   workflow_dispatch:
+permissions:
+  contents: write
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Gắn số bản và tên repo vào app
+        run: sed -i "s|__BUILD__|${{ github.run_number }}|;s|__REPO__|${{ github.repository }}|" www/index.html
       - uses: actions/setup-node@v4
         with: { node-version: 20 }
       - uses: actions/setup-java@v4
@@ -17,7 +21,9 @@ jobs:
       - run: bash scripts/prepare-android.sh
       - run: npx cap sync android
       - run: chmod +x android/gradlew && cd android && ./gradlew assembleDebug
-      - uses: actions/upload-artifact@v4
+      - run: cp android/app/build/outputs/apk/debug/app-debug.apk ExcelAutoFill.apk
+      - uses: softprops/action-gh-release@v2
         with:
-          name: ExcelAutoFill-APK
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          tag_name: v${{ github.run_number }}
+          name: Bản ${{ github.run_number }}
+          files: ExcelAutoFill.apk

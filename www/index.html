@@ -125,10 +125,14 @@ function analyze(V){
   const row=V[i]||[],nc=row.findIndex(x=>isName(norm(x)));if(nc<0)continue;
   /* Tiêu đề nhiều tầng (ô gộp): các dòng ngay dưới "Họ và tên" mà cột tên còn trống nhưng có chữ vẫn là dòng tiêu đề */
   let bot=i;
-  while(bot<i+3&&bot+1<V.length){const nx=V[bot+1]||[],nn=norm(nx[nc]);
+  while(bot<i+3){let k=1,nx=V[bot+1];
+   /* dòng trống hoàn toàn nằm giữa các tầng tiêu đề thì nhảy qua, xét dòng kế tiếp */
+   if(nx&&!nx.some(x=>String(x??'').trim())&&V[bot+2]){k=2;nx=V[bot+2]}
+   if(!nx||bot+k>i+3)break;
+   const nn=norm(nx[nc]);
    if(nn&&!isName(nn)&&!isSTT(nn))break;
    if(!nx.some((x,c)=>c!=nc&&hasL(x)))break;
-   bot++}
+   bot+=k}
   const T=[];for(let L=i;L<=bot;L++)T.push(V[L]||[]);
   const tx=(r,c)=>String(r[c]??'').replace(/\s+/g,' ').trim();
   const w=Math.max(0,...T.map(r=>r.length));
@@ -399,10 +403,34 @@ async function checkUpdate(manual){
  if(!APP_BUILD||REPO.indexOf('/')<1){if(manual)toast('Bản này chưa hỗ trợ tự cập nhật','warn');return}
  try{const r=await fetch(`https://api.github.com/repos/${REPO}/releases/latest`);if(!r.ok)throw new Error(r.status==404?'Repo cần để công khai (Public) và đã có bản phát hành':'Lỗi '+r.status);
   const j=await r.json(),v=parseInt(String(j.tag_name).replace(/\D/g,''))||0,a=(j.assets||[]).find(x=>/\.apk$/i.test(x.name));
-  if(v>APP_BUILD&&a){UPD={v,url:a.browser_download_url};const u=$('#upd');u.hidden=false;u.innerHTML=`<span>Có bản mới: <b>bản ${v}</b> (đang dùng bản ${APP_BUILD})</span><button class="btn" id="u-go">Cập nhật</button>`;
-   $('#u-go').onclick=()=>{toast('Đang mở trang tải. Tải xong mở file để cài đè.','ok');const B=window.Capacitor&&Capacitor.Plugins&&Capacitor.Plugins.Browser;try{B?B.open({url:UPD.url}):(location.href=UPD.url)}catch(e){location.href=UPD.url}}}
+  if(v>APP_BUILD&&a){UPD={v,url:a.browser_download_url,size:a.size||0};const u=$('#upd');u.hidden=false;u.innerHTML=`<span>Có bản mới: <b>bản ${v}</b> (đang dùng bản ${APP_BUILD})</span><button class="btn" id="u-go">Cập nhật</button>`;
+   $('#u-go').onclick=doUpdate}
   else if(manual)toast('Đang là bản mới nhất','ok')}
  catch(e){if(manual)toast(e.message||'Không kiểm tra được cập nhật','bad')}}
+/* cập nhật ngay trong app: tải APK rồi mở trình cài đặt (cần plugin ApkInstaller + Filesystem trong bản APK) */
+const mbs=b=>(b/1048576).toLocaleString('vi-VN',{maximumFractionDigits:1})+' MB';
+function showUpd(t,pct,btn){const u=$('#upd');u.hidden=false;
+ u.innerHTML=`<span>${t}${pct!=null?`<div class="bar" style="margin:8px 0 0"><b style="width:${pct}%"></b></div>`:''}</span>${btn?`<button class="btn" id="u-go">${btn}</button>`:''}`;
+ const g=$('#u-go');if(g)g.onclick=doUpdate}
+async function doUpdate(){
+ if(!UPD)return;
+ const P=(window.Capacitor&&Capacitor.Plugins)||{},FS=P.Filesystem,AI=P.ApkInstaller;
+ if(!FS||!AI){toast('Đang mở trang tải. Tải xong mở file để cài đè.','ok');try{P.Browser?P.Browser.open({url:UPD.url}):(location.href=UPD.url)}catch(e){location.href=UPD.url}return}
+ let L=null;
+ try{
+  const ci=await AI.canInstall();
+  if(!ci.value){showUpd('Cần cho phép app này cài ứng dụng. Bật công tắc ở màn hình vừa mở, quay lại rồi bấm Cập nhật.',null,'Cập nhật');await AI.openSettings();return}
+  showUpd('Đang tải... 0%',0,'');
+  L=await FS.addListener('progress',p=>{const tot=p.contentLength>0?p.contentLength:(UPD.size||0);
+   if(tot>0){const f=Math.min(1,p.bytes/tot),n=Math.round(f*100);showUpd(`Đang tải... ${n}% (${mbs(p.bytes)} / ${mbs(tot)})`,n,'')}});
+  const r=await FS.downloadFile({url:UPD.url,path:'update.apk',directory:'CACHE',progress:true});
+  let path=r&&r.path;if(!path){const x=await FS.getUri({path:'update.apk',directory:'CACHE'});path=x&&x.uri}
+  path=String(path||'').replace(/^file:\/\//,'');
+  showUpd('Đã tải xong. Đang mở trình cài đặt...',100,'');
+  await AI.install({path});
+  showUpd('Bấm “Cài đặt” ở hộp thoại hệ thống. Nếu đã hủy, bấm Cập nhật lại để thử lại.',null,'Cập nhật lại')}
+ catch(e){showUpd('Không cập nhật được: '+esc((e&&e.message)||'lỗi không rõ')+'. Kiểm tra mạng rồi thử lại.',null,'Thử lại')}
+ finally{if(L)try{L.remove()}catch(e){}}}
 /* ---- khởi động ---- */
 function pane(p,btn,hint,extra){return `<div class="card"><label>Link bảng Google Sheets</label><div class="row"><input class="in" id="${p}-link" placeholder="Dán link bảng vào đây" inputmode="url" autocomplete="off"><button class="btn" id="${p}-go">${btn}</button></div>${extra||''}<div class="hint">${hint}</div></div>
 <div class="card" id="${p}-live" hidden><div class="msg" id="${p}-msg"></div><div class="bar"><b id="${p}-bar"></b></div><div class="sub" id="${p}-cnt" style="margin:0"></div><div class="sheet" id="${p}-sheet"></div></div>

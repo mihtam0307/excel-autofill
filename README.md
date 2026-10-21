@@ -23,6 +23,12 @@ Sau này sửa `Code.gs` phải **Triển khai > Quản lý bản triển khai >
 ## Bước 3. Dùng
 Cài APK, mở mục **Drive**, nhập email, nhập mã 6 số nhận được. Từ giờ app tự nhớ đăng nhập. Đổi máy: đăng nhập lại bằng cùng email rồi bấm **Tải từ Drive**.
 
+## Cập nhật ngay trong app
+Khi có bản mới, app hiện thanh "Có bản mới". Bấm **Cập nhật**: app tải APK ngay trong app (có thanh tiến độ), tải xong tự mở trình cài đặt, bấm **Cài đặt** là xong, không cần ra trình duyệt.
+- Lần đầu Android sẽ hỏi cho phép app này cài ứng dụng. Bật công tắc ở màn hình vừa mở, quay lại bấm Cập nhật lần nữa.
+- Bản APK đang cài trên máy chưa có tính năng này, nên phải cài tay bản mới một lần. Từ bản sau đó mới cập nhật trong app được.
+- Repo phải để Public để app đọc được Releases.
+
 ## Link đã lưu và tự cập nhật
 - Mỗi link Google Sheets mày dán rồi bấm **Lấy** hoặc **Điền** sẽ được lưu ở mục **Lấy**, phần "Link đã lưu".
 - Mỗi lần mở app (và khi quay lại app sau hơn 10 phút), app đọc lại **chỉ những link đã lưu và đang bật "Tự cập nhật"** để lấy thông tin của người điền sau. App không ghi gì vào bảng trong bước này.

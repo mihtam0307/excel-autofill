@@ -1,0 +1,353 @@
+<!doctype html>
+<html lang="vi"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="theme-color" content="#0b1020"><title>Excel AutoFill</title>
+<style>
+:root{--bg:#070b18;--g:rgba(255,255,255,.07);--gb:rgba(255,255,255,.15);--t:#eef2ff;--m:#9aa6cc;--a:#6ee7d8;--a2:#8b7bff;--ok:#4ade80;--bad:#fb7185;--warn:#fbbf24;color-scheme:dark}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--t);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;overflow:hidden}
+.bg{position:fixed;inset:0;overflow:hidden}
+.bg i{position:absolute;border-radius:50%;filter:blur(70px);opacity:.5}
+.bg i:nth-child(1){width:70vmax;height:70vmax;left:-25vmax;top:-22vmax;background:#5b4bff}
+.bg i:nth-child(2){width:60vmax;height:60vmax;right:-28vmax;top:30%;background:#0ea5a4}
+.bg i:nth-child(3){width:50vmax;height:50vmax;left:0;bottom:-25vmax;background:#c026d3;opacity:.32}
+#app{position:relative;height:100%;display:flex;flex-direction:column}
+header{padding:calc(14px + env(safe-area-inset-top)) 20px 8px}
+header h1{margin:0;font-size:23px;font-weight:750;letter-spacing:-.4px}
+header p{margin:1px 0 0;color:var(--m);font-size:13px}
+main{flex:1;overflow-y:auto;padding:8px 14px 18px;-webkit-overflow-scrolling:touch}
+.tab{display:none}.tab.on{display:block}
+.glass,.card{background:var(--g);border:1px solid var(--gb);backdrop-filter:blur(24px) saturate(1.5);-webkit-backdrop-filter:blur(24px) saturate(1.5);box-shadow:0 10px 32px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.1)}
+.card{border-radius:22px;padding:14px;margin:0 0 12px}
+.card h3{margin:0 0 8px;font-size:15px}
+label{display:block;font-size:12.5px;color:var(--m);margin:10px 0 5px}
+label:first-child{margin-top:0}
+.in{width:100%;background:rgba(255,255,255,.06);border:1px solid var(--gb);border-radius:14px;padding:12px 14px;color:var(--t);font:inherit;outline:0}
+.in:focus{border-color:var(--a);box-shadow:0 0 0 3px rgba(110,231,216,.15)}
+.row{display:flex;gap:8px;align-items:center}
+.btn{border:0;border-radius:14px;padding:12px 18px;font:650 15px system-ui,sans-serif;color:#05111c;background:linear-gradient(135deg,#6ee7d8,#a5b4fc);white-space:nowrap}
+.btn:active{transform:scale(.97)}.btn:disabled{opacity:.45}
+.btn.gh{background:rgba(255,255,255,.09);color:var(--t);border:1px solid var(--gb)}
+.btn.dng{background:rgba(251,113,133,.2);color:#fecdd3;border:1px solid rgba(251,113,133,.4)}
+.btns{margin-top:14px}.btns .btn{flex:1}
+.hint,.sub{font-size:12.5px;color:var(--m);margin-top:8px}
+.chk{display:flex;gap:8px;align-items:center;margin-top:10px;font-size:13px;color:var(--t)}
+.msg{font-weight:600}.msg small{display:block;font-weight:400;color:var(--a);font-size:12.5px}
+.bar{height:7px;border-radius:9px;background:rgba(255,255,255,.1);margin:10px 0 4px;overflow:hidden}
+.bar b{display:block;height:100%;width:0;border-radius:9px;background:linear-gradient(90deg,#6ee7d8,#8b7bff);transition:width .25s}
+.sheet{overflow:auto;max-height:44vh;margin-top:10px;border-radius:14px;border:1px solid var(--gb);background:rgba(7,11,28,.6)}
+table{border-collapse:collapse;font-size:12.5px;min-width:100%}
+th,td{border:1px solid rgba(255,255,255,.08);padding:5px 9px;white-space:nowrap;max-width:220px;overflow:hidden;text-overflow:ellipsis}
+th{position:sticky;top:0;z-index:2;background:#1b2347;color:var(--m);font-weight:600}
+.rn{position:sticky;left:0;z-index:1;background:#1b2347;color:var(--m);text-align:center;min-width:34px}
+th.rn{z-index:3}
+tr.cur td{background:rgba(110,231,216,.16)}
+td.fill{background:rgba(139,123,255,.35)}td.ok{background:rgba(74,222,128,.2)}td.bad{background:rgba(251,113,133,.32)}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px}
+.chip,.st{font-size:12px;font-weight:600;padding:3px 10px;border-radius:99px;white-space:nowrap}
+.ok{--c:74,222,128}.warn{--c:251,191,36}.bad{--c:251,113,133}
+.chip.ok,.chip.warn,.chip.bad,.st.ok,.st.warn,.st.bad{background:rgba(var(--c),.16);color:rgb(var(--c));border:1px solid rgba(var(--c),.35)}
+.t-bad{color:var(--bad)}
+.pr{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:9px 0;border-top:1px solid rgba(255,255,255,.07)}
+.pr small{display:block;color:var(--m);font-size:12px}
+.pc{display:flex;gap:12px;padding:12px 14px;margin-bottom:10px}
+.av{flex:none;width:42px;height:42px;border-radius:14px;display:grid;place-items:center;font-weight:700;background:linear-gradient(135deg,#5b4bff,#0ea5a4)}
+.kv{display:flex;flex-wrap:wrap;gap:4px 12px;margin-top:3px;font-size:12.5px}
+.kv em{font-style:normal;color:var(--m);margin-right:4px}
+details.rp summary{list-style:none;display:flex;gap:12px;align-items:center;cursor:pointer}
+details.rp summary::-webkit-details-marker{display:none}
+details.rp summary div{flex:1}details.rp summary small{display:block;color:var(--m);font-size:12px}
+details.rp>.chips{margin-top:10px}
+.ic{width:38px;height:38px;border-radius:12px;display:grid;place-items:center;background:rgba(255,255,255,.08)}
+.ic svg{width:20px;height:20px}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--bad)}
+.big{font-size:30px;font-weight:750;letter-spacing:-.5px}.big small{font-size:14px;font-weight:500;color:var(--m)}
+.empty{text-align:center;color:var(--m);padding:26px 14px}
+ol{margin:8px 0 0;padding-left:20px;font-size:13px;color:var(--m)}ol li{margin:4px 0}
+svg{fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+nav{display:flex;gap:2px;margin:0 12px calc(10px + env(safe-area-inset-bottom));padding:6px;border-radius:26px;background:rgba(255,255,255,.08);border:1px solid var(--gb);backdrop-filter:blur(26px) saturate(1.6);-webkit-backdrop-filter:blur(26px) saturate(1.6);box-shadow:0 12px 34px rgba(0,0,0,.4)}
+nav button{flex:1;position:relative;background:none;border:0;color:var(--m);display:flex;flex-direction:column;align-items:center;gap:2px;font:500 10.5px system-ui,sans-serif;padding:8px 0 6px;border-radius:20px;transition:background .2s,color .2s}
+nav button.on{color:#fff;background:linear-gradient(135deg,rgba(139,123,255,.5),rgba(110,231,216,.32))}
+nav svg{width:22px;height:22px}
+.badge{position:absolute;top:3px;left:calc(50% + 6px);min-width:17px;height:17px;border-radius:9px;background:var(--bad);color:#fff;font-size:10px;line-height:17px;font-weight:700}
+#modal{position:fixed;inset:0;z-index:20;display:none;align-items:flex-end;background:rgba(3,6,16,.62);backdrop-filter:blur(6px)}
+#modal.on{display:flex}
+.mm{width:100%;max-height:90vh;overflow:auto;border-radius:28px 28px 0 0;padding:18px 16px calc(18px + env(safe-area-inset-bottom));animation:up .26s ease-out;background:rgba(20,26,56,.82)}
+@keyframes up{from{transform:translateY(40px);opacity:0}to{transform:none;opacity:1}}
+#toast{position:fixed;left:50%;top:calc(12px + env(safe-area-inset-top));transform:translate(-50%,-150%);z-index:30;padding:10px 18px;border-radius:99px;font-size:13.5px;font-weight:600;max-width:90vw;transition:transform .3s;background:rgba(30,36,70,.92);border:1px solid var(--gb);backdrop-filter:blur(20px)}
+#toast.on{transform:translate(-50%,0)}#toast.ok{color:var(--ok)}#toast.bad{color:var(--bad)}#toast.warn{color:var(--warn)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style></head>
+<body>
+<div class="bg"><i></i><i></i><i></i></div>
+<div id="app"><header><h1 id="ttl"></h1><p id="sub"></p></header>
+<main>
+<section class="tab" id="t-import"></section>
+<section class="tab" id="t-fill"></section>
+<section class="tab" id="t-report"></section>
+<section class="tab" id="t-people">
+ <div class="card"><div class="row"><input class="in" id="s-q" placeholder="Tìm theo tên hoặc thông tin" autocomplete="off"></div>
+ <div class="row btns"><button class="btn" id="p-add">Thêm người</button><button class="btn gh" id="p-fld">Các mục</button></div><div class="sub" id="p-cnt"></div></div>
+ <div id="p-list"></div>
+</section>
+<section class="tab" id="t-drive"></section>
+</main>
+<nav id="nav"></nav></div>
+<div id="modal"></div><div id="toast"></div>
+<script type="text/plain" id="gs">// Excel AutoFill - cầu nối Google Sheets + Drive. Đổi SECRET trước khi triển khai.
+const SECRET = 'DOI_MA_NAY';
+const FOLDER = 'ExcelAutoFill', FILE = 'autofill-data.json';
+
+function doGet() { return ContentService.createTextOutput('OK'); }
+
+function doPost(e) {
+  let out;
+  try {
+    const q = JSON.parse(e.postData.contents);
+    if (q.secret !== SECRET) throw new Error('Sai mã bí mật (SECRET)');
+    const fn = { ping: ping, read: read, write: write, save: save, load: load }[q.action];
+    if (!fn) throw new Error('Hành động không hợp lệ');
+    out = fn(q); out.ok = true;
+  } catch (err) { out = { ok: false, error: String(err.message || err) }; }
+  return ContentService.createTextOutput(JSON.stringify(out)).setMimeType(ContentService.MimeType.JSON);
+}
+
+function quota() { return { limit: DriveApp.getStorageLimit(), used: DriveApp.getStorageUsed() }; }
+function ping() { return { quota: quota(), user: Session.getEffectiveUser().getEmail() }; }
+
+function sheetOf(q) {
+  const ss = SpreadsheetApp.openById(q.id), g = q.gid === '' || q.gid == null ? null : Number(q.gid);
+  return (g === null ? null : ss.getSheets().filter(s => s.getSheetId() === g)[0]) || ss.getSheets()[0];
+}
+function read(q) {
+  const s = sheetOf(q);
+  return { values: s.getDataRange().getDisplayValues(), title: s.getParent().getName() + ' / ' + s.getName() };
+}
+function write(q) {
+  const s = sheetOf(q);
+  q.cells.forEach(c => s.getRange(c.r, c.c).setNumberFormat('@').setValue(String(c.v)));
+  SpreadsheetApp.flush();
+  return { n: q.cells.length };
+}
+
+function dataFile(create) {
+  const it = DriveApp.getFoldersByName(FOLDER);
+  const dir = it.hasNext() ? it.next() : (create ? DriveApp.createFolder(FOLDER) : null);
+  if (!dir) return null;
+  const f = dir.getFilesByName(FILE);
+  return f.hasNext() ? f.next() : (create ? dir.createFile(FILE, '{}', 'application/json') : null);
+}
+function save(q) {
+  const f = dataFile(true);
+  f.setContent(JSON.stringify(q.data));
+  return { id: f.getId(), size: f.getSize(), updated: f.getLastUpdated().getTime(), quota: quota() };
+}
+function load() {
+  const f = dataFile(false);
+  if (!f) return { data: null, quota: quota() };
+  return { data: JSON.parse(f.getBlob().getDataAsString()), size: f.getSize(), updated: f.getLastUpdated().getTime(), quota: quota() };
+}
+</script>
+<script>
+/*PURE*/
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const norm=s=>String(s||'').replace(/[đĐ]/g,'d').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+const SYN={cccd:['cccd','so cccd','cmnd','so cmnd','cmnd cccd','cccd cmnd','so cccd cmnd','can cuoc','can cuoc cong dan','so can cuoc','so can cuoc cong dan','so dinh danh','ma dinh danh'],
+sdt:['sdt','so dt','so dien thoai','dien thoai','dt','phone','sdt lien he','so dien thoai lien he','sdt zalo'],
+ngaycap:['ngay cap','ngay cap cccd','ngay cap cmnd'],noicap:['noi cap','noi cap cccd','noi cap cmnd'],
+ngaysinh:['ngay sinh','ngay thang nam sinh','sinh nhat'],email:['email','mail','gmail']};
+const canon=h=>{const n=norm(h);for(const k in SYN)if(SYN[k].includes(n))return k;return n};
+const isName=n=>/^(ho va ten|ho ten)( |$)|^ten( hoc sinh| sinh vien| hs| sv)?$/.test(n);
+const isSTT=n=>/^(stt|tt|so thu tu|no)$/.test(n);
+function parseCSV(t){const R=[];let r=[],f='',q=false;t=t.replace(/^\uFEFF/,'');
+ for(let i=0;i<t.length;i++){const c=t[i];
+  if(q){if(c=='"'){if(t[i+1]=='"'){f+='"';i++}else q=false}else f+=c}
+  else if(c=='"')q=true;
+  else if(c==','){r.push(f);f=''}
+  else if(c=='\n'||c=='\r'){if(c=='\r'&&t[i+1]=='\n')i++;r.push(f);R.push(r);r=[];f=''}
+  else f+=c}
+ if(f!==''||r.length){r.push(f);R.push(r)}return R}
+function analyze(V){
+ for(let i=0;i<Math.min(V.length,25);i++){
+  const row=V[i],nc=row.findIndex(x=>isName(norm(x)));if(nc<0)continue;
+  const cols=[];row.forEach((h,c)=>{const n=norm(h);if(c==nc||!n||isSTT(n))return;cols.push({c,label:String(h).trim(),k:canon(h)})});
+  const rows=[];for(let r=i+1;r<V.length;r++){const nm=String((V[r]||[])[nc]??'').trim();if(nm)rows.push({r,name:nm})}
+  return{hr:i,nc,cols,rows}}
+ return null}
+const nk=n=>norm(n),tk=n=>norm(n).split(' ').sort().join(' ');
+const deepEq=(a,b)=>a===b||(a&&b&&typeof a=='object'&&typeof b=='object'&&Object.keys(a).length==Object.keys(b).length&&Object.keys(a).every(k=>deepEq(a[k],b[k])));
+const colL=i=>{let s='';for(i++;i>0;i=Math.floor((i-1)/26))s=String.fromCharCode(65+(i-1)%26)+s;return s};
+const fmtB=b=>b>=2**30?(b/2**30).toFixed(2)+' GB':b>=2**20?(b/2**20).toFixed(1)+' MB':Math.round(b/1024)+' KB';
+/*END*/
+const $=s=>document.querySelector(s),sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const uid=()=>Math.random().toString(36).slice(2,9)+Date.now().toString(36).slice(-3);
+let DB;try{DB=JSON.parse(localStorage.getItem('eaf')||'null')}catch(e){}
+DB=Object.assign({fields:[],people:[],reports:[],cfg:{url:'',secret:'',auto:true,li:'',lf:''},quota:null,last:null},DB||{});
+const save=()=>{try{localStorage.setItem('eaf',JSON.stringify(DB))}catch(e){toast('Bộ nhớ máy đầy','bad')}};
+const IC={
+ import:'<svg viewBox="0 0 24 24"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 21h14"/></svg>',
+ fill:'<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M3 10h18M9 4v16"/></svg>',
+ report:'<svg viewBox="0 0 24 24"><path d="M7 3h8l4 4v14H7zM15 3v4h4M10 14l2 2 3-4"/></svg>',
+ people:'<svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.5-4 3-6 6.5-6s6 2 6.5 6M16 4.5a3.5 3.5 0 0 1 0 7M18 14c2 .6 3.3 2.4 3.5 6"/></svg>',
+ drive:'<svg viewBox="0 0 24 24"><path d="M7 18a4.5 4.5 0 0 1-.5-9A6 6 0 0 1 18 9.5 4 4 0 0 1 17 18z"/></svg>'};
+const TABS=[['import','Lấy','Lấy thông tin','Đọc bảng từ link, lưu theo từng người'],['fill','Điền','Tự động điền','Điền thông tin đã lưu vào bảng'],['report','Báo cáo','Báo cáo','Kết quả sau mỗi lần chạy'],['people','Thông tin','Thông tin','Dữ liệu từng người: sửa, thêm, xóa'],['drive','Drive','Drive','Nơi lưu trữ và dung lượng']];
+let cur='import',busy=false,tt;
+function toast(m,k){const t=$('#toast');t.textContent=m;t.className='on '+(k||'');clearTimeout(tt);tt=setTimeout(()=>t.className='',3200)}
+function go(t){cur=t;document.querySelectorAll('.tab').forEach(e=>e.classList.toggle('on',e.id=='t-'+t));
+ document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('on',b.dataset.t==t));
+ const T=TABS.find(x=>x[0]==t);$('#ttl').textContent=T[2];$('#sub').textContent=T[3];
+ if(t=='report'){renderReports();DB.reports.forEach(r=>r.read=true);save();badge()}
+ if(t=='people')renderPeople();if(t=='drive')renderDrive();$('main').scrollTop=0}
+function badge(){const n=DB.reports.filter(r=>!r.read).length,b=$('#nav [data-t=report]');let e=b.querySelector('.badge');
+ if(n&&!e){e=document.createElement('span');e.className='badge';b.appendChild(e)}if(e){n?e.textContent=n:e.remove()}}
+const chip=(k,t)=>`<span class="chip ${k}">${t}</span>`;
+const LBL={ok:'Khớp',warn:'Cần xem',bad:'Lỗi'};
+const rowHTML=r=>`<div class="pr"><div><b>${esc(r.name)}</b><small>${esc(r.detail)}</small></div><span class="st ${r.st}">${LBL[r.st]}</span></div>`;
+function addReport(r){DB.reports.unshift({id:uid(),ts:Date.now(),read:false,...r});DB.reports=DB.reports.slice(0,40);save();badge();toast('Có báo cáo mới','ok')}
+function renderRes(p,rows){const s={ok:0,warn:0,bad:0};rows.forEach(r=>s[r.st]++);
+ $(`#${p}-sum`).innerHTML=chip('ok',s.ok+' khớp')+(s.warn?chip('warn',s.warn+' cần xem'):'')+(s.bad?chip('bad',s.bad+' lỗi'):'');
+ $(`#${p}-res`).innerHTML=rows.map(rowHTML).join('');$(`#${p}-out`).hidden=false}
+function renderReports(){const el=$('#t-report');
+ if(!DB.reports.length){el.innerHTML='<div class="card empty">Chưa có báo cáo. Báo cáo sẽ hiện ở đây sau mỗi lần lấy, điền hoặc lưu lên Drive.</div>';return}
+ el.innerHTML=DB.reports.map(r=>{const s={ok:0,warn:0,bad:0};r.rows.forEach(x=>s[x.st]++);
+  return `<details class="card rp" ${r.read?'':'open'}><summary><span class="ic">${IC[r.type]}</span><div><b>${esc(r.title)}</b><small>${new Date(r.ts).toLocaleString('vi-VN')}</small></div>${r.read?'':'<i class="dot"></i>'}</summary>
+  <div class="chips">${chip('ok',s.ok+' khớp')}${s.warn?chip('warn',s.warn+' cần xem'):''}${s.bad?chip('bad',s.bad+' lỗi'):''}</div>${r.extra?`<div class="sub">${esc(r.extra)}</div>`:''}${r.rows.map(rowHTML).join('')}</details>`}).join('')}
+/* ---- Google Sheets / Apps Script ---- */
+async function gs(action,data={}){const{url,secret}=DB.cfg;if(!url)throw new Error('Chưa kết nối Apps Script (mục Drive)');
+ const r=await fetch(url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({...data,action,secret})});
+ const t=await r.text();let j;try{j=JSON.parse(t)}catch(e){throw new Error('Apps Script trả về sai định dạng. Kiểm tra URL /exec và quyền "Bất kỳ ai"')}
+ if(!j.ok)throw new Error(j.error||'Lỗi Apps Script');return j}
+async function fetchSheet(link){const m=link.match(/\/d\/([\w-]+)/);if(!m)throw new Error('Link không phải Google Sheets');
+ const id=m[1],gid=(link.match(/[#&?]gid=(\d+)/)||[])[1]||'';let V=null,title='';
+ try{const r=await fetch(`https://docs.google.com/spreadsheets/d/${id}/export?format=csv${gid?'&gid='+gid:''}`);const t=await r.text();
+  if(r.ok&&!/^\s*<(!doctype|html)/i.test(t))V=parseCSV(t)}catch(e){}
+ if(!V&&DB.cfg.url){const j=await gs('read',{id,gid});V=j.values;title=j.title}
+ if(!V)throw new Error('Không đọc được bảng. Mở quyền "Bất kỳ ai có link" hoặc kết nối Apps Script ở mục Drive.');
+ return{id,gid,V,title}}
+function mkSheet(el,V){const w=Math.max(1,...V.map(r=>r.length));
+ el.innerHTML='<table><thead><tr><th class="rn"></th>'+Array.from({length:w},(_,i)=>`<th>${colL(i)}</th>`).join('')+'</tr></thead><tbody>'+
+ V.map((r,i)=>`<tr data-r="${i}"><td class="rn">${i+1}</td>`+Array.from({length:w},(_,c)=>`<td data-c="${c}">${esc(r[c])}</td>`).join('')+'</tr>').join('')+'</tbody></table>'}
+const cell=(el,r,c)=>el.querySelector(`tr[data-r="${r}"] td[data-c="${c}"]`);
+function focusRow(el,r){const o=el.querySelector('tr.cur');o&&o.classList.remove('cur');const tr=el.querySelector(`tr[data-r="${r}"]`);if(tr){tr.classList.add('cur');el.scrollTop=tr.offsetTop-el.clientHeight/2}}
+function findPerson(name){const a=nk(name),b=tk(name);return DB.people.find(p=>nk(p.name)==a)||DB.people.find(p=>tk(p.name)==b)}
+const live=(p,msg,f,cnt)=>{$(`#${p}-msg`).innerHTML=msg;$(`#${p}-bar`).style.width=Math.round(f*100)+'%';$(`#${p}-cnt`).textContent=cnt||''};
+function start(p){if(busy)return false;busy=true;$(`#${p}-go`).disabled=true;$(`#${p}-live`).hidden=false;$(`#${p}-out`).hidden=true;$(`#${p}-sheet`).innerHTML='';return true}
+function fail(p,e){live(p,`<span class="t-bad">${esc(e.message)}</span>`,0);toast(e.message,'bad')}
+function end(p){busy=false;$(`#${p}-go`).disabled=false}
+/* ---- Mục 1: lấy thông tin ---- */
+async function runImport(){const link=$('#i-link').value.trim();if(!link)return toast('Dán link bảng vào trước nhé','warn');
+ if(!start('i'))return;DB.cfg.li=link;save();
+ try{live('i','Đang tải bảng…',.03);const S=await fetchSheet(link),el=$('#i-sheet');mkSheet(el,S.V);
+  const A=analyze(S.V);if(!A)throw new Error('Không thấy cột "Họ và tên" trong 25 dòng đầu của bảng');
+  const nf=[];A.cols.forEach(c=>{if(!DB.fields.some(f=>f.k==c.k)){DB.fields.push({k:c.k,label:c.label});nf.push(c.label)}});
+  const N=A.rows.length,dl=Math.max(15,Math.min(140,3500/Math.max(N,1)));let created=0;
+  for(let n=0;n<N;n++){const{r,name}=A.rows[n];focusRow(el,r);
+   live('i',`Đang lấy: <b>${esc(name)}</b>`+(nf.length?`<small>Mục mới thêm vào app: ${esc(nf.join(', '))}</small>`:''),(n+1)/N,`${n+1}/${N} người`);
+   let p=findPerson(name);if(!p){p={id:uid(),name,data:{}};DB.people.push(p);created++}
+   A.cols.forEach(c=>{const v=String(S.V[r][c.c]??'').trim();if(v){p.data[c.k]=v;const td=cell(el,r,c.c);td&&td.classList.add('fill')}});
+   await sleep(dl)}
+  save();live('i','Đang kiểm tra lại từng người…',1,`${N} người`);const rows=[];
+  for(const{r,name}of A.rows){const p=findPerson(name);let tot=0,okc=0;const bad=[];
+   A.cols.forEach(c=>{const v=String(S.V[r][c.c]??'').trim();if(!v)return;tot++;const td=cell(el,r,c.c);td&&td.classList.remove('fill');
+    if(p&&p.data[c.k]===v){okc++;td&&td.classList.add('ok')}else{bad.push(c.label);td&&td.classList.add('bad')}});
+   rows.push(!p||bad.length?{name,st:'bad',detail:'Lệch: '+(bad.join(', ')||'không thấy trong app')}:tot?{name,st:'ok',detail:`${okc}/${tot} mục khớp`}:{name,st:'warn',detail:'Bảng chưa có thông tin của người này'});await sleep(8)}
+  let drv='';if(DB.cfg.auto&&DB.cfg.url){try{const d=await driveSync();drv=d.ok?' · Drive: đã lưu và khớp':' · Drive: lưu nhưng chưa khớp'}catch(e){drv=' · Drive lỗi: '+e.message}}
+  renderRes('i',rows);live('i',`Xong. Đã kiểm tra ${N} người`,1,'');
+  addReport({type:'import',title:S.title||'Bảng Google Sheets',rows,extra:`Người mới: ${created} · Mục mới: ${nf.length}${drv}`})
+ }catch(e){fail('i',e)}finally{end('i')}}
+/* ---- Mục 2: tự động điền ---- */
+async function runFill(){const link=$('#f-link').value.trim();if(!link)return toast('Dán link bảng cần điền','warn');
+ if(!DB.cfg.url){toast('Cần kết nối Apps Script ở mục Drive để ghi vào bảng','warn');return go('drive')}
+ if(!DB.people.length)return toast('Chưa có thông tin nào được lưu','warn');
+ if(!start('f'))return;DB.cfg.lf=link;save();
+ try{live('f','Đang tải bảng…',.03);const S=await fetchSheet(link),el=$('#f-sheet');mkSheet(el,S.V);
+  const A=analyze(S.V);if(!A)throw new Error('Không thấy cột "Họ và tên" trong 25 dòng đầu của bảng');
+  const over=$('#f-over').checked,N=A.rows.length,rows=[],written=[];
+  for(let n=0;n<N;n++){const{r,name}=A.rows[n];focusRow(el,r);live('f',`Đang điền: <b>${esc(name)}</b>`,(n+1)/N,`${n+1}/${N} người`);
+   const row={name};rows.push(row);const p=findPerson(name);
+   if(!p){Object.assign(row,{st:'bad',detail:'Chưa có người này trong app'});continue}
+   const cells=[],same=[],conf=[],miss=[];
+   A.cols.forEach(c=>{const have=String(S.V[r][c.c]??'').trim(),val=p.data[c.k],td=cell(el,r,c.c);
+    if(!val){if(!have)miss.push(c.label);return}
+    if(val===have){same.push(c.label);td&&td.classList.add('ok');return}
+    if(have&&!over){conf.push(c.label);td&&td.classList.add('bad');return}
+    cells.push({r:r+1,c:c.c+1,v:val,ri:r,ci:c.c,label:c.label})});
+   if(cells.length){try{await gs('write',{id:S.id,gid:S.gid,cells:cells.map(x=>({r:x.r,c:x.c,v:x.v}))});
+     cells.forEach(x=>{const td=cell(el,x.ri,x.ci);if(td){td.textContent=x.v;td.classList.add('fill')}written.push({...x,row})})}
+    catch(e){Object.assign(row,{st:'bad',detail:'Ghi lỗi: '+e.message});continue}}
+   Object.assign(row,{st:conf.length||miss.length?'warn':'ok',detail:[cells.length&&`điền ${cells.length} ô`,same.length&&`${same.length} ô đã đúng`,conf.length&&`ô đã có dữ liệu khác: ${conf.join(', ')}`,miss.length&&`app chưa có: ${miss.join(', ')}`].filter(Boolean).join(' · ')||'Không có gì để điền'})}
+  if(written.length){live('f','Đang đọc lại bảng để kiểm tra…',1,`${written.length} ô`);const back=(await gs('read',{id:S.id,gid:S.gid})).values;
+   written.forEach(x=>{const got=String((back[x.ri]||[])[x.ci]??'').trim(),td=cell(el,x.ri,x.ci);td&&td.classList.remove('fill');
+    if(got===x.v)td&&td.classList.add('ok');else{td&&td.classList.add('bad');x.row.st='bad';x.row.detail+=` · KHÔNG KHỚP ${x.label} (bảng đang có "${got}")`}})}
+  renderRes('f',rows);live('f',`Xong. Đã điền ${written.length} ô cho ${N} người`,1,'');
+  addReport({type:'fill',title:S.title||'Bảng Google Sheets',rows,extra:`Đã điền ${written.length} ô`+(over?' · chế độ ghi đè':'')})
+ }catch(e){fail('f',e)}finally{end('f')}}
+/* ---- Mục 4: thông tin ---- */
+function renderPeople(){const q=norm($('#s-q').value),L=DB.people.filter(p=>!q||norm(p.name+' '+Object.values(p.data).join(' ')).includes(q));
+ $('#p-cnt').textContent=`${DB.people.length} người · ${DB.fields.length} mục thông tin`;
+ $('#p-list').innerHTML=L.length?L.map(p=>{const kv=DB.fields.filter(f=>p.data[f.k]).map(f=>`<span><em>${esc(f.label)}</em>${esc(p.data[f.k])}</span>`).join('');
+  return `<div class="card pc" data-id="${p.id}"><div class="av">${esc((p.name.trim().split(/\s+/).pop()||'?')[0].toUpperCase())}</div><div><b>${esc(p.name)}</b><div class="kv">${kv||'<em>Chưa có thông tin</em>'}</div></div></div>`}).join(''):'<div class="card empty">Chưa có ai. Lấy thông tin từ một bảng hoặc bấm Thêm người.</div>'}
+const modal=h=>{$('#modal').innerHTML=`<div class="mm glass">${h}</div>`;$('#modal').classList.add('on')};
+const closeM=()=>$('#modal').classList.remove('on');
+function openEdit(id){const p=id?DB.people.find(x=>x.id==id):{name:'',data:{}};
+ modal(`<h3>${id?'Sửa thông tin':'Thêm người'}</h3><label>Họ và tên</label><input class="in" id="e-name" value="${esc(p.name)}">`+
+ DB.fields.map(f=>`<label>${esc(f.label)}</label><input class="in e-f" data-k="${esc(f.k)}" value="${esc(p.data[f.k]||'')}">`).join('')+
+ `<label>Thêm mục mới (tùy chọn)</label><div class="row"><input class="in" id="e-nl" placeholder="Tên mục, vd: Email"><input class="in" id="e-nv" placeholder="Giá trị"></div>
+ <div class="row btns"><button class="btn gh" id="e-x">Hủy</button>${id?'<button class="btn dng" id="e-del">Xóa</button>':''}<button class="btn" id="e-ok">Lưu</button></div>`);
+ $('#e-x').onclick=closeM;
+ if(id)$('#e-del').onclick=()=>{if(confirm('Xóa '+p.name+'?')){DB.people=DB.people.filter(x=>x.id!=id);afterEdit('Đã xóa')}};
+ $('#e-ok').onclick=()=>{const name=$('#e-name').value.trim();if(!name)return toast('Cần nhập họ và tên','warn');
+  const q=id?p:{id:uid(),name,data:{}};q.name=name;
+  document.querySelectorAll('.e-f').forEach(i=>{const v=i.value.trim();v?q.data[i.dataset.k]=v:delete q.data[i.dataset.k]});
+  const nl=$('#e-nl').value.trim();if(nl){const k=canon(nl);if(!DB.fields.some(f=>f.k==k))DB.fields.push({k,label:nl});const v=$('#e-nv').value.trim();if(v)q.data[k]=v}
+  if(!id)DB.people.push(q);afterEdit('Đã lưu')}}
+function openFields(){modal(`<h3>Các mục thông tin</h3>`+(DB.fields.map(f=>`<div class="pr"><b>${esc(f.label)}</b><button class="btn dng" data-k="${esc(f.k)}" style="padding:6px 12px">Xóa</button></div>`).join('')||'<div class="empty">Chưa có mục nào</div>')+
+ `<div class="row btns"><button class="btn gh" id="e-x">Đóng</button></div>`);$('#e-x').onclick=closeM;
+ document.querySelectorAll('.mm [data-k]').forEach(b=>b.onclick=()=>{const k=b.dataset.k;if(!confirm('Xóa mục này khỏi tất cả mọi người?'))return;
+  DB.fields=DB.fields.filter(f=>f.k!=k);DB.people.forEach(p=>delete p.data[k]);afterEdit('Đã xóa mục')})}
+function afterEdit(m){save();closeM();renderPeople();toast(m,'ok');if(DB.cfg.auto&&DB.cfg.url)driveSync().then(d=>toast(d.ok?'Đã lưu lên Drive và khớp':'Drive chưa khớp',d.ok?'ok':'warn')).catch(e=>toast('Drive lỗi: '+e.message,'bad'))}
+/* ---- Mục 5: Drive ---- */
+async function driveSync(rep){const data={v:1,fields:DB.fields,people:DB.people};const s=await gs('save',{data}),l=await gs('load');
+ const L=(l.data&&l.data.people)||[],bad=DB.people.filter(p=>!deepEq(p,L.find(x=>x.id==p.id))).map(p=>p.name);
+ const ok=!bad.length&&L.length==DB.people.length&&deepEq(data.fields,l.data.fields);
+ DB.quota=l.quota||s.quota;DB.last={t:Date.now(),ok,n:DB.people.length,size:l.size};save();
+ if(rep)addReport({type:'drive',title:'Lưu lên Drive',rows:ok?[{name:`${DB.people.length} người`,st:'ok',detail:'Dữ liệu trên Drive khớp với trong app'}]:bad.map(n=>({name:n,st:'bad',detail:'Không khớp giữa app và Drive'})),extra:`Tệp ${fmtB(l.size||0)}`});
+ if(cur=='drive')renderDrive();return{ok,bad}}
+async function driveLoad(){const l=await gs('load');if(!l.data||!l.data.people)return toast('Trên Drive chưa có dữ liệu','warn');
+ if(!confirm(`Thay dữ liệu trong app bằng bản trên Drive (${l.data.people.length} người)?`))return;
+ DB.fields=l.data.fields||[];DB.people=l.data.people;DB.quota=l.quota;save();renderDrive();toast('Đã tải từ Drive','ok')}
+function quotaHTML(){const q=DB.quota;if(!q)return '<div class="hint">Chưa có số liệu. Kết nối rồi bấm Kiểm tra.</div>';
+ const unl=!(q.limit>0),pct=unl?4:Math.min(100,q.used/q.limit*100);
+ return `<div class="big">${unl?'Không giới hạn':fmtB(q.limit-q.used)}<small>${unl?'':' còn trống'}</small></div><div class="bar"><b style="width:${pct}%"></b></div><div class="sub">Đã dùng ${fmtB(q.used)}${unl?'':' / '+fmtB(q.limit)}</div>`}
+function renderDrive(){const c=DB.cfg,L=DB.last;
+ $('#t-drive').innerHTML=`<div class="card"><h3>Dung lượng Drive</h3>${quotaHTML()}</div>
+ <div class="card"><h3>Lưu trữ</h3><div class="sub" style="margin:0 0 10px">${L?`Lần lưu gần nhất: ${new Date(L.t).toLocaleString('vi-VN')} · ${L.n} người · ${L.ok?'<span style="color:var(--ok)">khớp</span>':'<span class="t-bad">chưa khớp</span>'}`:'Chưa lưu lên Drive.'}</div>
+ <div class="row"><button class="btn" id="d-save" style="flex:1">Lưu lên Drive</button><button class="btn gh" id="d-load" style="flex:1">Tải từ Drive</button></div>
+ <label class="chk"><input type="checkbox" id="d-auto" ${c.auto?'checked':''}> Tự lưu lên Drive sau mỗi lần lấy hoặc sửa</label></div>
+ <div class="card"><h3>Kết nối</h3><label>URL Apps Script (kết thúc bằng /exec)</label><input class="in" id="d-url" value="${esc(c.url)}" placeholder="https://script.google.com/macros/s/…/exec" autocomplete="off">
+ <label>Mật khẩu (SECRET trong mã)</label><input class="in" id="d-sec" value="${esc(c.secret)}" autocomplete="off"><div class="row btns"><button class="btn" id="d-test">Lưu và kiểm tra</button></div>
+ <details style="margin-top:12px"><summary style="color:var(--a)">Cách kết nối (làm 1 lần)</summary><ol><li>Bấm <b>Sao chép mã</b> bên dưới.</li><li>Mở script.google.com, tạo Dự án mới, xóa mã cũ rồi dán mã vào.</li><li>Đổi <b>DOI_MA_NAY</b> ở dòng đầu thành mật khẩu của bạn.</li><li>Triển khai, chọn Ứng dụng web. Thực thi bằng: Tôi. Quyền truy cập: Bất kỳ ai. Bấm Triển khai và cấp quyền.</li><li>Dán URL /exec và mật khẩu vào các ô trên, bấm Lưu và kiểm tra.</li></ol>
+ <div class="row btns"><button class="btn gh" id="d-copy">Sao chép mã Apps Script</button></div></details></div>`;
+ $('#d-auto').onchange=e=>{DB.cfg.auto=e.target.checked;save()};
+ $('#d-copy').onclick=async()=>{const t=$('#gs').textContent.trim();try{await navigator.clipboard.writeText(t)}catch(e){const a=document.createElement('textarea');a.value=t;document.body.appendChild(a);a.select();document.execCommand('copy');a.remove()}toast('Đã sao chép mã','ok')};
+ const cfg=()=>{DB.cfg.url=$('#d-url').value.trim();DB.cfg.secret=$('#d-sec').value.trim();save()};
+ $('#d-test').onclick=async()=>{cfg();try{const j=await gs('ping');DB.quota=j.quota;save();renderDrive();toast('Đã kết nối: '+j.user,'ok')}catch(e){toast(e.message,'bad')}};
+ $('#d-save').onclick=async()=>{cfg();const b=$('#d-save');b.disabled=true;b.textContent='Đang lưu và kiểm tra…';try{const d=await driveSync(true);toast(d.ok?'Đã lưu và khớp với Drive':'Lưu xong nhưng có chỗ chưa khớp',d.ok?'ok':'warn')}catch(e){toast(e.message,'bad');renderDrive()}};
+ $('#d-load').onclick=async()=>{cfg();try{await driveLoad()}catch(e){toast(e.message,'bad')}}}
+/* ---- khởi động ---- */
+function pane(p,btn,hint,extra){return `<div class="card"><label>Link bảng Google Sheets</label><div class="row"><input class="in" id="${p}-link" placeholder="Dán link bảng vào đây" inputmode="url" autocomplete="off"><button class="btn" id="${p}-go">${btn}</button></div>${extra||''}<div class="hint">${hint}</div></div>
+<div class="card" id="${p}-live" hidden><div class="msg" id="${p}-msg"></div><div class="bar"><b id="${p}-bar"></b></div><div class="sub" id="${p}-cnt" style="margin:0"></div><div class="sheet" id="${p}-sheet"></div></div>
+<div class="card" id="${p}-out" hidden><h3>Kết quả kiểm tra</h3><div class="chips" id="${p}-sum"></div><div id="${p}-res"></div></div>`}
+$('#t-import').innerHTML=pane('i','Lấy','Bảng cần mở quyền “Bất kỳ ai có link”, hoặc kết nối Apps Script ở mục Drive. Mục như CCCD, SĐT được tự thêm vào app.');
+$('#t-fill').innerHTML=pane('f','Điền','Ghi vào bảng cần kết nối Apps Script (mục Drive). Mặc định chỉ điền ô trống.','<label class="chk"><input type="checkbox" id="f-over"> Ghi đè cả ô đã có dữ liệu</label>');
+$('#i-link').value=DB.cfg.li||'';$('#f-link').value=DB.cfg.lf||'';
+$('#i-go').onclick=runImport;$('#f-go').onclick=runFill;
+$('#nav').innerHTML=TABS.map(t=>`<button data-t="${t[0]}">${IC[t[0]]}<span>${t[1]}</span></button>`).join('');
+document.querySelectorAll('#nav button').forEach(b=>b.onclick=()=>go(b.dataset.t));
+$('#s-q').oninput=renderPeople;$('#p-add').onclick=()=>openEdit();$('#p-fld').onclick=openFields;
+$('#p-list').onclick=e=>{const c=e.target.closest('.pc');c&&openEdit(c.dataset.id)};
+$('#modal').onclick=e=>{if(e.target.id=='modal')closeM()};
+go('import');badge();
+if(DB.cfg.url)gs('ping').then(j=>{DB.quota=j.quota;save();if(cur=='drive')renderDrive()}).catch(()=>{});
+</script></body></html>

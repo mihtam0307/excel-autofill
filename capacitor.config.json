@@ -1,0 +1,7 @@
+{
+  "appId": "com.mihtam.excelautofill",
+  "appName": "Excel AutoFill",
+  "webDir": "www",
+  "backgroundColor": "#070b18",
+  "plugins": { "CapacitorHttp": { "enabled": true } }
+}

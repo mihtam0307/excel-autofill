@@ -98,60 +98,6 @@ nav svg{width:22px;height:22px}
 </main>
 <nav id="nav"></nav></div>
 <div id="modal"></div><div id="toast"></div>
-<script type="text/plain" id="gs">// Excel AutoFill - cầu nối Google Sheets + Drive. Đổi SECRET trước khi triển khai.
-const SECRET = 'DOI_MA_NAY';
-const FOLDER = 'ExcelAutoFill', FILE = 'autofill-data.json';
-
-function doGet() { return ContentService.createTextOutput('OK'); }
-
-function doPost(e) {
-  let out;
-  try {
-    const q = JSON.parse(e.postData.contents);
-    if (q.secret !== SECRET) throw new Error('Sai mã bí mật (SECRET)');
-    const fn = { ping: ping, read: read, write: write, save: save, load: load }[q.action];
-    if (!fn) throw new Error('Hành động không hợp lệ');
-    out = fn(q); out.ok = true;
-  } catch (err) { out = { ok: false, error: String(err.message || err) }; }
-  return ContentService.createTextOutput(JSON.stringify(out)).setMimeType(ContentService.MimeType.JSON);
-}
-
-function quota() { return { limit: DriveApp.getStorageLimit(), used: DriveApp.getStorageUsed() }; }
-function ping() { return { quota: quota(), user: Session.getEffectiveUser().getEmail() }; }
-
-function sheetOf(q) {
-  const ss = SpreadsheetApp.openById(q.id), g = q.gid === '' || q.gid == null ? null : Number(q.gid);
-  return (g === null ? null : ss.getSheets().filter(s => s.getSheetId() === g)[0]) || ss.getSheets()[0];
-}
-function read(q) {
-  const s = sheetOf(q);
-  return { values: s.getDataRange().getDisplayValues(), title: s.getParent().getName() + ' / ' + s.getName() };
-}
-function write(q) {
-  const s = sheetOf(q);
-  q.cells.forEach(c => s.getRange(c.r, c.c).setNumberFormat('@').setValue(String(c.v)));
-  SpreadsheetApp.flush();
-  return { n: q.cells.length };
-}
-
-function dataFile(create) {
-  const it = DriveApp.getFoldersByName(FOLDER);
-  const dir = it.hasNext() ? it.next() : (create ? DriveApp.createFolder(FOLDER) : null);
-  if (!dir) return null;
-  const f = dir.getFilesByName(FILE);
-  return f.hasNext() ? f.next() : (create ? dir.createFile(FILE, '{}', 'application/json') : null);
-}
-function save(q) {
-  const f = dataFile(true);
-  f.setContent(JSON.stringify(q.data));
-  return { id: f.getId(), size: f.getSize(), updated: f.getLastUpdated().getTime(), quota: quota() };
-}
-function load() {
-  const f = dataFile(false);
-  if (!f) return { data: null, quota: quota() };
-  return { data: JSON.parse(f.getBlob().getDataAsString()), size: f.getSize(), updated: f.getLastUpdated().getTime(), quota: quota() };
-}
-</script>
 <script>
 /*PURE*/
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -187,7 +133,8 @@ const $=s=>document.querySelector(s),sleep=ms=>new Promise(r=>setTimeout(r,ms));
 const APP_BUILD=Number('__BUILD__')||0,REPO='__REPO__';
 const uid=()=>Math.random().toString(36).slice(2,9)+Date.now().toString(36).slice(-3);
 let DB;try{DB=JSON.parse(localStorage.getItem('eaf')||'null')}catch(e){}
-DB=Object.assign({fields:[],people:[],reports:[],cfg:{url:'',secret:'',auto:true,li:'',lf:'',cid:'',tok:null,email:''},quota:null,last:null},DB||{});
+DB=Object.assign({fields:[],people:[],reports:[],cfg:{},quota:null,last:null},DB||{});
+DB.cfg=Object.assign({auto:true,li:'',lf:'',mail:''},DB.cfg);['url','secret','cid','tok','pend','email'].forEach(k=>delete DB.cfg[k]);
 const save=()=>{try{localStorage.setItem('eaf',JSON.stringify(DB))}catch(e){toast('Bộ nhớ máy đầy','bad')}};
 const IC={
  import:'<svg viewBox="0 0 24 24"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 21h14"/></svg>',
@@ -218,62 +165,55 @@ function renderReports(){const el=$('#t-report');
   return `<details class="card rp" ${r.read?'':'open'}><summary><span class="ic">${IC[r.type]}</span><div><b>${esc(r.title)}</b><small>${new Date(r.ts).toLocaleString('vi-VN')}</small></div>${r.read?'':'<i class="dot"></i>'}</summary>
   <div class="chips">${chip('ok',s.ok+' khớp')}${s.warn?chip('warn',s.warn+' cần xem'):''}${s.bad?chip('bad',s.bad+' lỗi'):''}</div>${r.extra?`<div class="sub">${esc(r.extra)}</div>`:''}${r.rows.map(rowHTML).join('')}</details>`}).join('')}
 /*GOOGLE*/
-const GREDIR='com.mihtam.excelautofill:/oauth2redirect',GSCOPE='https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file',GFILE='ExcelAutoFill-data.json';
-const linked=()=>!!(DB.cfg.tok||DB.cfg.url);
-const gs=(a,d)=>DB.cfg.tok?gg(a,d):gsScript(a,d);
-const b64u=b=>btoa(String.fromCharCode(...new Uint8Array(b))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
-async function tokenCall(p){const r=await fetch('https://oauth2.googleapis.com/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams(p).toString()});
- const t=await r.text();let j={};try{j=JSON.parse(t)}catch(e){}
- if(!r.ok||j.error)throw new Error(j.error=='invalid_grant'?'Phiên Google hết hạn, hãy đăng nhập lại':'Đăng nhập lỗi: '+(j.error_description||j.error||r.status));return j}
-async function googleLogin(){const cid=DB.cfg.cid;if(!cid)throw new Error('Dán Client ID trước');
- const ver=b64u(crypto.getRandomValues(new Uint8Array(48))),st=b64u(crypto.getRandomValues(new Uint8Array(12))),ch=b64u(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(ver)));
- DB.cfg.pend={ver,st};save();
- const u='https://accounts.google.com/o/oauth2/v2/auth?'+new URLSearchParams({client_id:cid,redirect_uri:GREDIR,response_type:'code',scope:GSCOPE,code_challenge:ch,code_challenge_method:'S256',state:st,access_type:'offline',prompt:'consent'});
- const B=window.Capacitor&&Capacitor.Plugins&&Capacitor.Plugins.Browser;B?await B.open({url:u}):(location.href=u)}
-async function onRedirect(url){if(!String(url).startsWith('com.mihtam.excelautofill:'))return;
- const q=new URLSearchParams(String(url).split('?')[1]||''),P=DB.cfg.pend;try{Capacitor.Plugins.Browser.close()}catch(e){}
- if(q.get('error'))return toast('Google từ chối: '+q.get('error'),'bad');
- if(!P||q.get('state')!=P.st)return toast('Phiên đăng nhập không khớp, hãy thử lại','bad');
- try{const j=await tokenCall({client_id:DB.cfg.cid,code:q.get('code'),code_verifier:P.ver,redirect_uri:GREDIR,grant_type:'authorization_code'});
-  DB.cfg.tok={a:j.access_token,r:j.refresh_token,e:Date.now()+(j.expires_in-60)*1000};DB.cfg.pend=null;save();
-  const me=await gg('ping');DB.cfg.email=me.user;DB.quota=me.quota;save();if(cur=='drive')renderDrive();toast('Đã đăng nhập '+me.user,'ok')}
- catch(e){toast(e.message,'bad')}}
-async function gtoken(){const t=DB.cfg.tok;if(Date.now()<t.e)return t.a;if(!t.r)throw new Error('Phiên Google hết hạn, hãy đăng nhập lại');
- const j=await tokenCall({client_id:DB.cfg.cid,refresh_token:t.r,grant_type:'refresh_token'});t.a=j.access_token;t.e=Date.now()+(j.expires_in-60)*1000;save();return t.a}
-async function gapi(url,o={}){const tk=await gtoken(),r=await fetch(url,{...o,headers:{Authorization:'Bearer '+tk,...(o.headers||{})}}),t=await r.text();let j={};try{j=t?JSON.parse(t):{}}catch(e){}
- if(!r.ok)throw new Error((j.error&&j.error.message)||'Lỗi Google '+r.status);return j}
-const JH={'Content-Type':'application/json'};
-async function gfind(){const j=await gapi('https://www.googleapis.com/drive/v3/files?q='+encodeURIComponent(`name='${GFILE}' and trashed=false`)+'&fields=files(id,size)');return j.files[0]}
-async function gg(action,d={}){
- if(action=='ping'){const j=await gapi('https://www.googleapis.com/drive/v3/about?fields=user(emailAddress),storageQuota(limit,usage)');
-  return{user:j.user.emailAddress,quota:{limit:Number(j.storageQuota.limit||0),used:Number(j.storageQuota.usage||0)}}}
- if(action=='read'||action=='write'){
-  const m=await gapi(`https://sheets.googleapis.com/v4/spreadsheets/${d.id}?fields=properties.title,sheets.properties(sheetId,title)`);
-  const sh=(d.gid!==''&&d.gid!=null&&m.sheets.find(s=>String(s.properties.sheetId)==String(d.gid)))||m.sheets[0],T=sh.properties.title,rng="'"+T.replace(/'/g,"''")+"'";
-  if(action=='read'){const v=await gapi(`https://sheets.googleapis.com/v4/spreadsheets/${d.id}/values/${encodeURIComponent(rng)}?valueRenderOption=FORMATTED_VALUE`);return{values:v.values||[],title:m.properties.title+' / '+T}}
-  await gapi(`https://sheets.googleapis.com/v4/spreadsheets/${d.id}/values:batchUpdate`,{method:'POST',headers:JH,body:JSON.stringify({valueInputOption:'RAW',data:d.cells.map(c=>({range:`${rng}!${colL(c.c-1)}${c.r}`,values:[[String(c.v)]]}))})});
-  return{n:d.cells.length}}
- if(action=='save'){let f=await gfind();if(!f)f=await gapi('https://www.googleapis.com/drive/v3/files?fields=id',{method:'POST',headers:JH,body:JSON.stringify({name:GFILE,mimeType:'application/json'})});
-  const body=JSON.stringify(d.data);await gapi(`https://www.googleapis.com/upload/drive/v3/files/${f.id}?uploadType=media`,{method:'PATCH',headers:JH,body});
-  return{size:new Blob([body]).size,quota:(await gg('ping')).quota}}
- if(action=='load'){const f=await gfind(),quota=(await gg('ping')).quota;if(!f)return{data:null,quota};
-  const data=await gapi(`https://www.googleapis.com/drive/v3/files/${f.id}?alt=media`);return{data,size:Number(f.size||0),quota}}
- throw new Error('Hành động không hợp lệ')}
-function googleCard(){const c=DB.cfg;return `<div class="card"><h3>Tài khoản Google</h3>`+(c.tok?`<div class="sub" style="margin:0 0 10px">Đã đăng nhập: <b style="color:var(--t)">${esc(c.email||'')}</b></div><button class="btn gh" id="d-out" style="width:100%">Đăng xuất</button>`
- :`<label>Client ID (dán 1 lần)</label><input class="in" id="d-cid" value="${esc(c.cid||'')}" placeholder="xxxx.apps.googleusercontent.com" autocomplete="off"><div class="row btns"><button class="btn" id="d-login">Đăng nhập Google</button></div>`)+
- `<details style="margin-top:12px"><summary style="color:var(--a)">Thiết lập Google Cloud (làm 1 lần)</summary><ol><li>Vào console.cloud.google.com, tạo Project mới (hoặc dùng lại project cũ của bạn).</li><li>APIs &amp; Services, Library: bật <b>Google Sheets API</b> và <b>Google Drive API</b>.</li><li>OAuth consent screen: chọn External, điền tên app và email. Thêm email Gmail của bạn vào Test users, hoặc bấm Publish app để không bị hết hạn sau 7 ngày.</li><li>Credentials, Create credentials, OAuth client ID, loại <b>Android</b>. Package name: <b>com.mihtam.excelautofill</b>. SHA-1: <b>30:0E:6B:2B:32:37:98:5E:F1:FB:ED:77:76:49:75:D0:D5:82:1F:1E</b></li><li>Mở Advanced settings của client, bật <b>Enable custom URI scheme</b>, rồi Create.</li><li>Copy Client ID dán vào ô trên và bấm Đăng nhập Google. Khi Google báo "chưa xác minh", chọn Nâng cao, rồi Tiếp tục.</li></ol></details></div>`}
+/* Máy chủ Apps Script + đăng nhập bằng email (mã 6 số), giống Sổ học tập */
+const GAS_URL='__GAS_URL__',GAS_SEC='__GAS_SECRET__',KN='eaf_key',AL='abcdefghijkmnpqrstuvwxyz23456789';
+const KEYV=()=>{let k=localStorage.getItem(KN);if(!k){const r=crypto.getRandomValues(new Uint8Array(24));k=[...r].map(x=>AL[x%32]).join('');localStorage.setItem(KN,k)}return k};
+const linked=()=>!!DB.cfg.mail;
+async function call(b){
+ if(GAS_URL.startsWith('__'))throw new Error('Bản build chưa có địa chỉ máy chủ (xem README)');
+ let r;try{r=await fetch(GAS_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({...b,s:GAS_SEC,k:KEYV()}),redirect:'follow'})}
+ catch(e){throw new Error('Không kết nối được máy chủ. Kiểm tra mạng rồi thử lại.')}
+ const t=await r.text();try{return JSON.parse(t)}catch(e){throw new Error('Máy chủ trả về sai định dạng. Kiểm tra GAS_URL và quyền \"Bất kỳ ai\" khi triển khai.')}}
+const gerr=j=>j.msg?'Máy chủ báo lỗi: '+String(j.msg).slice(0,160):j.code==403?'Sai GAS_SECRET: không khớp với Code.gs trên máy chủ':j.code==413?'Dữ liệu quá lớn':'Lỗi máy chủ ('+(j.code||'?')+')';
+async function gs(a,d={}){
+ if(!linked())throw new Error('Chưa đăng nhập (mục Drive)');
+ const j=await call({...d,a});if(j.ok)return j;
+ if(j.code==401){DB.cfg.mail='';save();renderDrive();throw new Error('Phiên đăng nhập hết hạn, hãy đăng nhập lại ở mục Drive')}
+ throw new Error(gerr(j))}
+let LG={step:1,email:'',err:''};
+const MAILRE=/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+async function loginSend(em){em=String(em||'').trim().toLowerCase();LG.email=em;
+ if(!MAILRE.test(em)){LG.err='Email chưa đúng.';return renderDrive()}
+ const b=$('#l-send')||$('#l-re');if(b){b.disabled=true;b.textContent='Đang gửi…'}
+ try{const r=await call({a:'lstart',email:em});
+  if(r.ok){LG.step=2;LG.err=''}
+  else LG.err=r.code==400?'Email chưa đúng.':r.code==451?'Email này chưa được phép dùng app.':r.code==503?'Hôm nay đã hết hạn mức gửi email. Thử lại ngày mai.':r.code==403?gerr(r):'Không gửi được mã (lỗi '+(r.code||'?')+').'}
+ catch(e){LG.err=e.message}
+ renderDrive()}
+async function loginVerify(){const c=($('#l-code').value||'').replace(/\D/g,'');
+ if(c.length!=6){LG.err='Mã gồm 6 số.';return renderDrive()}
+ const b=$('#l-ok');b.disabled=true;b.textContent='Đang kiểm tra…';
+ try{const r=await call({a:'lverify',email:LG.email,code:c});
+  if(r.ok){localStorage.setItem(KN,r.key);DB.cfg.mail=LG.email;LG={step:1,email:'',err:''};save();
+   try{const me=await gs('ping');DB.quota=me.quota;save()}catch(e){}
+   renderDrive();return toast('Đã đăng nhập '+DB.cfg.mail,'ok')}
+  LG.err=r.code==401?'Mã chưa đúng, nhập lại nhé.':r.code==410?'Mã hết hạn. Bấm \"Gửi lại mã\".':r.code==429?'Thử quá nhiều lần. Bấm \"Gửi lại mã\" để lấy mã mới.':r.code==403?gerr(r):'Không xác nhận được (lỗi '+(r.code||'?')+').'}
+ catch(e){LG.err=e.message}
+ renderDrive()}
+function doLogout(){if(!confirm('Đăng xuất khỏi máy này?\n\nDữ liệu vẫn nằm trên Drive, đăng nhập lại bằng email '+DB.cfg.mail+' là dùng tiếp.'))return;
+ DB.cfg.mail='';try{localStorage.removeItem(KN)}catch(e){}save();renderDrive();toast('Đã đăng xuất')}
+function accountCard(){
+ if(linked())return `<div class=\"card\"><h3>Tài khoản</h3><div class=\"sub\" style=\"margin:0 0 10px\">Đã đăng nhập: <b style=\"color:var(--t)\">${esc(DB.cfg.mail)}</b></div><button class=\"btn gh\" id=\"d-out\" style=\"width:100%\">Đăng xuất</button></div>`;
+ const e=LG.err?`<div class=\"hint t-bad\">${esc(LG.err)}</div>`:'';
+ if(LG.step==2)return `<div class=\"card\"><h3>Nhập mã xác nhận</h3><div class=\"sub\" style=\"margin:0 0 10px\">Đã gửi mã 6 số tới <b style=\"color:var(--t)\">${esc(LG.email)}</b>. Chưa thấy thì kiểm tra cả mục Spam. Mã có hiệu lực 10 phút.</div><input class=\"in\" id=\"l-code\" inputmode=\"numeric\" maxlength=\"6\" autocomplete=\"one-time-code\" placeholder=\"123456\" style=\"font-size:22px;letter-spacing:6px;text-align:center\">${e}<div class=\"row btns\"><button class=\"btn\" id=\"l-ok\">Xác nhận</button></div><div class=\"row btns\" style=\"margin-top:8px\"><button class=\"btn gh\" id=\"l-re\">Gửi lại mã</button><button class=\"btn gh\" id=\"l-em\">Đổi email</button></div></div>`;
+ return `<div class=\"card\"><h3>Đăng nhập</h3><div class=\"sub\" style=\"margin:0 0 10px\">Nhập email, nhận mã 6 số qua email rồi nhập là vào.</div><label>Email</label><input class=\"in\" id=\"l-mail\" type=\"email\" inputmode=\"email\" autocomplete=\"email\" autocapitalize=\"none\" spellcheck=\"false\" placeholder=\"ten@gmail.com\" value=\"${esc(LG.email)}\">${e}<div class=\"row btns\"><button class=\"btn\" id=\"l-send\">Gửi mã xác nhận</button></div></div>`}
 /*GEND*/
-/* ---- Google Sheets / Apps Script ---- */
-async function gsScript(action,data={}){const{url,secret}=DB.cfg;if(!url)throw new Error('Chưa đăng nhập Google (mục Drive)');
- const r=await fetch(url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({...data,action,secret})});
- const t=await r.text();let j;try{j=JSON.parse(t)}catch(e){throw new Error('Apps Script trả về sai định dạng. Kiểm tra URL /exec và quyền "Bất kỳ ai"')}
- if(!j.ok)throw new Error(j.error||'Lỗi Apps Script');return j}
 async function fetchSheet(link){const m=link.match(/\/d\/([\w-]+)/);if(!m)throw new Error('Link không phải Google Sheets');
  const id=m[1],gid=(link.match(/[#&?]gid=(\d+)/)||[])[1]||'';let V=null,title='';
  try{const r=await fetch(`https://docs.google.com/spreadsheets/d/${id}/export?format=csv${gid?'&gid='+gid:''}`);const t=await r.text();
   if(r.ok&&!/^\s*<(!doctype|html)/i.test(t))V=parseCSV(t)}catch(e){}
  if(!V&&linked()){const j=await gs('read',{id,gid});V=j.values;title=j.title}
- if(!V)throw new Error('Không đọc được bảng. Mở quyền "Bất kỳ ai có link" hoặc đăng nhập Google ở mục Drive.');
+ if(!V)throw new Error('Không đọc được bảng. Mở quyền "Bất kỳ ai có link" hoặc đăng nhập ở mục Drive.');
  return{id,gid,V,title}}
 function mkSheet(el,V){const w=Math.max(1,...V.map(r=>r.length));
  el.innerHTML='<table><thead><tr><th class="rn"></th>'+Array.from({length:w},(_,i)=>`<th>${colL(i)}</th>`).join('')+'</tr></thead><tbody>'+
@@ -308,7 +248,7 @@ async function runImport(){const link=$('#i-link').value.trim();if(!link)return 
  }catch(e){fail('i',e)}finally{end('i')}}
 /* ---- Mục 2: tự động điền ---- */
 async function runFill(){const link=$('#f-link').value.trim();if(!link)return toast('Dán link bảng cần điền','warn');
- if(!linked()){toast('Cần đăng nhập Google ở mục Drive để ghi vào bảng','warn');return go('drive')}
+ if(!linked()){toast('Cần đăng nhập ở mục Drive để ghi vào bảng','warn');return go('drive')}
  if(!DB.people.length)return toast('Chưa có thông tin nào được lưu','warn');
  if(!start('f'))return;DB.cfg.lf=link;save();
  try{live('f','Đang tải bảng…',.03);const S=await fetchSheet(link),el=$('#f-sheet');mkSheet(el,S.V);
@@ -375,20 +315,15 @@ function renderDrive(){const c=DB.cfg,L=DB.last;
  <div class="card"><h3>Lưu trữ</h3><div class="sub" style="margin:0 0 10px">${L?`Lần lưu gần nhất: ${new Date(L.t).toLocaleString('vi-VN')} · ${L.n} người · ${L.ok?'<span style="color:var(--ok)">khớp</span>':'<span class="t-bad">chưa khớp</span>'}`:'Chưa lưu lên Drive.'}</div>
  <div class="row"><button class="btn" id="d-save" style="flex:1">Lưu lên Drive</button><button class="btn gh" id="d-load" style="flex:1">Tải từ Drive</button></div>
  <label class="chk"><input type="checkbox" id="d-auto" ${c.auto?'checked':''}> Tự lưu lên Drive sau mỗi lần lấy hoặc sửa</label></div>
- ${googleCard()}
- <div class="card"><details><summary style="color:var(--a)">Cách cũ: kết nối bằng Apps Script</summary><label>URL Apps Script (kết thúc bằng /exec)</label><input class="in" id="d-url" value="${esc(c.url)}" placeholder="https://script.google.com/macros/s/…/exec" autocomplete="off">
- <label>Mật khẩu (SECRET trong mã)</label><input class="in" id="d-sec" value="${esc(c.secret)}" autocomplete="off"><div class="row btns"><button class="btn" id="d-test">Lưu và kiểm tra</button></div>
- <details style="margin-top:12px"><summary style="color:var(--a)">Cách kết nối (làm 1 lần)</summary><ol><li>Bấm <b>Sao chép mã</b> bên dưới.</li><li>Mở script.google.com, tạo Dự án mới, xóa mã cũ rồi dán mã vào.</li><li>Đổi <b>DOI_MA_NAY</b> ở dòng đầu thành mật khẩu của bạn.</li><li>Triển khai, chọn Ứng dụng web. Thực thi bằng: Tôi. Quyền truy cập: Bất kỳ ai. Bấm Triển khai và cấp quyền.</li><li>Dán URL /exec và mật khẩu vào các ô trên, bấm Lưu và kiểm tra.</li></ol>
- <div class="row btns"><button class="btn gh" id="d-copy">Sao chép mã Apps Script</button></div></details></details></div>
+ ${accountCard()}
  <div class="card"><h3>Ứng dụng</h3><div class="sub" style="margin:0 0 10px">Phiên bản: ${APP_BUILD?'bản '+APP_BUILD:'chạy thử'}. App tự kiểm tra bản mới mỗi lần mở.</div><button class="btn gh" id="d-upd" style="width:100%">Kiểm tra cập nhật</button></div>`;
  $('#d-auto').onchange=e=>{DB.cfg.auto=e.target.checked;save()};
- if(c.tok){$('#d-out').onclick=()=>{DB.cfg.tok=null;DB.cfg.email='';save();renderDrive();toast('Đã đăng xuất')}}
- else{$('#d-login').onclick=async()=>{DB.cfg.cid=$('#d-cid').value.trim();save();try{await googleLogin()}catch(e){toast(e.message,'bad')}}}
- $('#d-copy').onclick=async()=>{const t=$('#gs').textContent.trim();try{await navigator.clipboard.writeText(t)}catch(e){const a=document.createElement('textarea');a.value=t;document.body.appendChild(a);a.select();document.execCommand('copy');a.remove()}toast('Đã sao chép mã','ok')};
- const cfg=()=>{DB.cfg.url=$('#d-url').value.trim();DB.cfg.secret=$('#d-sec').value.trim();save()};
- $('#d-test').onclick=async()=>{cfg();try{const j=await gs('ping');DB.quota=j.quota;save();renderDrive();toast('Đã kết nối: '+j.user,'ok')}catch(e){toast(e.message,'bad')}};
- $('#d-save').onclick=async()=>{cfg();const b=$('#d-save');b.disabled=true;b.textContent='Đang lưu và kiểm tra…';try{const d=await driveSync(true);toast(d.ok?'Đã lưu và khớp với Drive':'Lưu xong nhưng có chỗ chưa khớp',d.ok?'ok':'warn')}catch(e){toast(e.message,'bad');renderDrive()}};
- $('#d-load').onclick=async()=>{cfg();try{await driveLoad()}catch(e){toast(e.message,'bad')}}
+ const lb=(id,f)=>{const x=$('#'+id);if(x)x.onclick=f};
+ lb('d-out',doLogout);lb('l-send',()=>loginSend($('#l-mail').value));lb('l-re',()=>loginSend(LG.email));lb('l-em',()=>{LG.step=1;LG.err='';renderDrive()});lb('l-ok',loginVerify);
+ const lc=$('#l-code');if(lc)lc.onkeydown=e=>{if(e.key=='Enter')loginVerify()};
+ const lm=$('#l-mail');if(lm)lm.onkeydown=e=>{if(e.key=='Enter')loginSend(lm.value)};
+ $('#d-save').onclick=async()=>{const b=$('#d-save');b.disabled=true;b.textContent='Đang lưu và kiểm tra…';try{const d=await driveSync(true);toast(d.ok?'Đã lưu và khớp với Drive':'Lưu xong nhưng có chỗ chưa khớp',d.ok?'ok':'warn')}catch(e){toast(e.message,'bad');renderDrive()}};
+ $('#d-load').onclick=async()=>{try{await driveLoad()}catch(e){toast(e.message,'bad')}}
  $('#d-upd').onclick=()=>checkUpdate(true)}
 /* ---- tự cập nhật qua GitHub Releases ---- */
 let UPD=null;
@@ -404,8 +339,8 @@ async function checkUpdate(manual){
 function pane(p,btn,hint,extra){return `<div class="card"><label>Link bảng Google Sheets</label><div class="row"><input class="in" id="${p}-link" placeholder="Dán link bảng vào đây" inputmode="url" autocomplete="off"><button class="btn" id="${p}-go">${btn}</button></div>${extra||''}<div class="hint">${hint}</div></div>
 <div class="card" id="${p}-live" hidden><div class="msg" id="${p}-msg"></div><div class="bar"><b id="${p}-bar"></b></div><div class="sub" id="${p}-cnt" style="margin:0"></div><div class="sheet" id="${p}-sheet"></div></div>
 <div class="card" id="${p}-out" hidden><h3>Kết quả kiểm tra</h3><div class="chips" id="${p}-sum"></div><div id="${p}-res"></div></div>`}
-$('#t-import').innerHTML=pane('i','Lấy','Bảng cần mở quyền “Bất kỳ ai có link”, hoặc đăng nhập Google ở mục Drive. Mục như CCCD, SĐT được tự thêm vào app.');
-$('#t-fill').innerHTML=pane('f','Điền','Ghi vào bảng cần đăng nhập Google (mục Drive). Mặc định chỉ điền ô trống.','<label class="chk"><input type="checkbox" id="f-over"> Ghi đè cả ô đã có dữ liệu</label>');
+$('#t-import').innerHTML=pane('i','Lấy','Bảng cần mở quyền “Bất kỳ ai có link”, hoặc đăng nhập ở mục Drive. Mục như CCCD, SĐT được tự thêm vào app.');
+$('#t-fill').innerHTML=pane('f','Điền','Ghi vào bảng cần đăng nhập (mục Drive). Mặc định chỉ điền ô trống.','<label class="chk"><input type="checkbox" id="f-over"> Ghi đè cả ô đã có dữ liệu</label>');
 $('#i-link').value=DB.cfg.li||'';$('#f-link').value=DB.cfg.lf||'';
 $('#i-go').onclick=runImport;$('#f-go').onclick=runFill;
 $('#nav').innerHTML=TABS.map(t=>`<button data-t="${t[0]}">${IC[t[0]]}<span>${t[1]}</span></button>`).join('');
@@ -413,7 +348,6 @@ document.querySelectorAll('#nav button').forEach(b=>b.onclick=()=>go(b.dataset.t
 $('#s-q').oninput=renderPeople;$('#p-add').onclick=()=>openEdit();$('#p-fld').onclick=openFields;
 $('#p-list').onclick=e=>{const c=e.target.closest('.pc');c&&openEdit(c.dataset.id)};
 $('#modal').onclick=e=>{if(e.target.id=='modal')closeM()};
-try{const A=window.Capacitor&&Capacitor.Plugins&&Capacitor.Plugins.App;A&&A.addListener('appUrlOpen',e=>onRedirect(e.url))}catch(e){}
 go('import');badge();setTimeout(()=>checkUpdate(false),1500);
 if(linked())gs('ping').then(j=>{DB.quota=j.quota;save();if(cur=='drive')renderDrive()}).catch(()=>{});
 </script></body></html>

@@ -10,10 +10,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Gắn số bản và tên repo vào app
-        run: sed -i "s|__BUILD__|${{ github.run_number }}|;s|__REPO__|${{ github.repository }}|" www/index.html
       - uses: actions/setup-node@v4
         with: { node-version: 20 }
+      - name: Gắn máy chủ, số bản và tên repo vào app
+        env:
+          GAS_URL: ${{ secrets.GAS_URL }}
+          GAS_SECRET: ${{ secrets.GAS_SECRET }}
+          BUILD_NUM: ${{ github.run_number }}
+          REPO_NAME: ${{ github.repository }}
+        run: node scripts/inject.js
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: 17 }
       - run: npm install

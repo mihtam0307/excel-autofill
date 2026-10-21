@@ -13,5 +13,3 @@ find $R -name 'splash*.png' -exec cp icons/splash.png {} \;
 sed -i 's|</style>|<item name="android:statusBarColor">#0B1020</item><item name="android:navigationBarColor">#0B1020</item><item name="android:windowLightStatusBar">false</item></style>|' $R/values/styles.xml
 mkdir -p ~/.android && cp signing/debug.keystore ~/.android/debug.keystore
 sed -i "s/versionCode 1/versionCode ${GITHUB_RUN_NUMBER:-1}/" android/app/build.gradle
-# nhận kết quả đăng nhập Google (custom URI scheme)
-sed -i '0,/<\/activity>/s|</activity>|<intent-filter><action android:name="android.intent.action.VIEW"/><category android:name="android.intent.category.DEFAULT"/><category android:name="android.intent.category.BROWSABLE"/><data android:scheme="com.mihtam.excelautofill"/></intent-filter></activity>|' android/app/src/main/AndroidManifest.xml

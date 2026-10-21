@@ -23,6 +23,15 @@ Sau này sửa `Code.gs` phải **Triển khai > Quản lý bản triển khai >
 ## Bước 3. Dùng
 Cài APK, mở mục **Drive**, nhập email, nhập mã 6 số nhận được. Từ giờ app tự nhớ đăng nhập. Đổi máy: đăng nhập lại bằng cùng email rồi bấm **Tải từ Drive**.
 
+## Link đã lưu và tự cập nhật
+- Mỗi link Google Sheets mày dán rồi bấm **Lấy** hoặc **Điền** sẽ được lưu ở mục **Lấy**, phần "Link đã lưu".
+- Mỗi lần mở app (và khi quay lại app sau hơn 10 phút), app đọc lại **chỉ những link đã lưu và đang bật "Tự cập nhật"** để lấy thông tin của người điền sau. App không ghi gì vào bảng trong bước này.
+- Có nút **Cập nhật** từng link, **Cập nhật tất cả ngay**, tắt/bật tự cập nhật từng link, và **Xóa** link.
+- Danh sách link cũng được lưu lên Drive cùng dữ liệu.
+
+## Bảng có tiêu đề 2-3 tầng
+Bảng kiểu "Giáo dục thể chất / Y tế học đường" ở trên, "Cân nặng / Chiều cao" ở dưới (ô gộp) được đọc theo tiêu đề dưới cùng. Nếu hai nhóm có cột trùng tên, app ghi thêm tên nhóm phía trước.
+
 ## Cần biết
 - Việc ghi vào bảng chạy bằng tài khoản Google của mày (người triển khai), nên bảng cần chia sẻ quyền **Chỉnh sửa** cho tài khoản đó. Bảng mở "Bất kỳ ai có link" thì đọc được mà không cần đăng nhập.
 - `GAS_SECRET` nằm trong APK nên chỉ chặn được người lạ vô tình. Đừng đăng URL máy chủ công khai.

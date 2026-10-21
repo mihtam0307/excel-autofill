@@ -105,8 +105,9 @@ const norm=s=>String(s||'').replace(/[đĐ]/g,'d').normalize('NFD').replace(/[\u
 const SYN={cccd:['cccd','so cccd','cmnd','so cmnd','cmnd cccd','cccd cmnd','so cccd cmnd','can cuoc','can cuoc cong dan','so can cuoc','so can cuoc cong dan','so dinh danh','ma dinh danh'],
 sdt:['sdt','so dt','so dien thoai','dien thoai','dt','phone','sdt lien he','so dien thoai lien he','sdt zalo'],
 ngaycap:['ngay cap','ngay cap cccd','ngay cap cmnd'],noicap:['noi cap','noi cap cccd','noi cap cmnd'],
-ngaysinh:['ngay sinh','ngay thang nam sinh','sinh nhat'],email:['email','mail','gmail']};
-const canon=h=>{const n=norm(h);for(const k in SYN)if(SYN[k].includes(n))return k;return n};
+ngaysinh:['ngay sinh','ngay thang nam sinh','sinh nhat'],email:['email','mail','gmail'],
+cannang:['can nang','trong luong','khoi luong'],chieucao:['chieu cao']};
+const canon=h=>{const n=norm(String(h).replace(/\([^)]*\)/g,''))||norm(h);for(const k in SYN)if(SYN[k].includes(n))return k;return n};
 const isName=n=>/^(ho va ten|ho ten)( |$)|^ten( hoc sinh| sinh vien| hs| sv)?$/.test(n);
 const isSTT=n=>/^(stt|tt|so thu tu|no)$/.test(n);
 function parseCSV(t){const R=[];let r=[],f='',q=false;t=t.replace(/^\uFEFF/,'');
@@ -117,12 +118,35 @@ function parseCSV(t){const R=[];let r=[],f='',q=false;t=t.replace(/^\uFEFF/,'');
   else if(c=='\n'||c=='\r'){if(c=='\r'&&t[i+1]=='\n')i++;r.push(f);R.push(r);r=[];f=''}
   else f+=c}
  if(f!==''||r.length){r.push(f);R.push(r)}return R}
+const hasL=s=>/\p{L}/u.test(String(s??''));
+const sid=l=>{const m=String(l).match(/\/d\/([\w-]+)/);return m?m[1]+'#'+((String(l).match(/[#&?]gid=(\d+)/)||[])[1]||''):''};
 function analyze(V){
  for(let i=0;i<Math.min(V.length,25);i++){
-  const row=V[i],nc=row.findIndex(x=>isName(norm(x)));if(nc<0)continue;
-  const cols=[];row.forEach((h,c)=>{const n=norm(h);if(c==nc||!n||isSTT(n))return;cols.push({c,label:String(h).trim(),k:canon(h)})});
-  const rows=[];for(let r=i+1;r<V.length;r++){const nm=String((V[r]||[])[nc]??'').trim();if(nm)rows.push({r,name:nm})}
-  return{hr:i,nc,cols,rows}}
+  const row=V[i]||[],nc=row.findIndex(x=>isName(norm(x)));if(nc<0)continue;
+  /* Tiêu đề nhiều tầng (ô gộp): các dòng ngay dưới "Họ và tên" mà cột tên còn trống nhưng có chữ vẫn là dòng tiêu đề */
+  let bot=i;
+  while(bot<i+3&&bot+1<V.length){const nx=V[bot+1]||[],nn=norm(nx[nc]);
+   if(nn&&!isName(nn)&&!isSTT(nn))break;
+   if(!nx.some((x,c)=>c!=nc&&hasL(x)))break;
+   bot++}
+  const T=[];for(let L=i;L<=bot;L++)T.push(V[L]||[]);
+  const tx=(r,c)=>String(r[c]??'').replace(/\s+/g,' ').trim();
+  const w=Math.max(0,...T.map(r=>r.length));
+  const gr=T.map(r=>{let g='';const o=[];for(let c=0;c<w;c++){const t=tx(r,c);if(t)g=t;o.push(g)}return o});
+  const cols=[];
+  for(let c=0;c<w;c++){if(c==nc)continue;
+   let lv=-1,lab='';for(let L=T.length-1;L>=0;L--){const t=tx(T[L],c);if(t){lv=L;lab=t;break}}
+   if(lv<0||isSTT(norm(lab)))continue;
+   let g='';for(let L=lv-1;L>=0;L--){const x=gr[L][c];if(x&&x!==lab&&!isName(norm(x))&&!isSTT(norm(x))){g=x;break}}
+   if(g&&/^\(.*\)$/.test(lab))lab=g+' '+lab;
+   cols.push({c,label:lab,g})}
+  const setK=()=>cols.forEach(x=>x.k=canon(x.label)),cnt=()=>{const m={};cols.forEach(x=>m[x.k]=(m[x.k]||0)+1);return m};
+  setK();let m=cnt();
+  cols.forEach(x=>{if(m[x.k]>1&&x.g)x.label=x.g+' · '+x.label});setK();m=cnt();
+  cols.forEach(x=>{if(m[x.k]>1){x.label+=' ['+colL(x.c)+']';x.k+=' '+colL(x.c).toLowerCase()}});
+  cols.forEach(x=>delete x.g);
+  const rows=[];for(let r=bot+1;r<V.length;r++){const nm=String((V[r]||[])[nc]??'').trim();if(nm)rows.push({r,name:nm})}
+  return{hr:i,hb:bot,nc,cols,rows}}
  return null}
 const nk=n=>norm(n),tk=n=>norm(n).split(' ').sort().join(' ');
 const deepEq=(a,b)=>a===b||(a&&b&&typeof a=='object'&&typeof b=='object'&&Object.keys(a).length==Object.keys(b).length&&Object.keys(a).every(k=>deepEq(a[k],b[k])));
@@ -133,7 +157,7 @@ const $=s=>document.querySelector(s),sleep=ms=>new Promise(r=>setTimeout(r,ms));
 const APP_BUILD=Number('__BUILD__')||0,REPO='__REPO__';
 const uid=()=>Math.random().toString(36).slice(2,9)+Date.now().toString(36).slice(-3);
 let DB;try{DB=JSON.parse(localStorage.getItem('eaf')||'null')}catch(e){}
-DB=Object.assign({fields:[],people:[],reports:[],cfg:{},quota:null,last:null},DB||{});
+DB=Object.assign({fields:[],people:[],reports:[],links:[],cfg:{},quota:null,last:null},DB||{});if(!Array.isArray(DB.links))DB.links=[];
 DB.cfg=Object.assign({auto:true,li:'',lf:'',mail:''},DB.cfg);['url','secret','cid','tok','pend','email'].forEach(k=>delete DB.cfg[k]);
 const save=()=>{try{localStorage.setItem('eaf',JSON.stringify(DB))}catch(e){toast('Bộ nhớ máy đầy','bad')}};
 const IC={
@@ -225,10 +249,54 @@ const live=(p,msg,f,cnt)=>{$(`#${p}-msg`).innerHTML=msg;$(`#${p}-bar`).style.wid
 function start(p){if(busy)return false;busy=true;$(`#${p}-go`).disabled=true;$(`#${p}-live`).hidden=false;$(`#${p}-out`).hidden=true;$(`#${p}-sheet`).innerHTML='';return true}
 function fail(p,e){live(p,`<span class="t-bad">${esc(e.message)}</span>`,0);toast(e.message,'bad')}
 function end(p){busy=false;$(`#${p}-go`).disabled=false}
+/* ---- Link đã lưu + tự cập nhật khi mở app ---- */
+let syncing=false,lastAuto=0;
+const ago=t=>{if(!t)return 'chưa cập nhật lần nào';const m=Math.round((Date.now()-t)/60000);return m<1?'vừa xong':m<60?m+' phút trước':m<1440?Math.round(m/60)+' giờ trước':new Date(t).toLocaleDateString('vi-VN')};
+function saveLink(url,S){const key=sid(url);if(!key)return;
+ const A=S&&S.V?analyze(S.V):null;let t=(S&&S.title)||'';
+ if(!t&&A)for(let r=0;r<A.hr&&!t;r++)for(const x of (S.V[r]||[])){const s=String(x||'').replace(/\s+/g,' ').trim();if(s.length>6&&hasL(s)){t=s.slice(0,60);break}}
+ let L=DB.links.find(x=>x.key==key);
+ if(!L){L={id:uid(),key,url,auto:true,title:'',last:0,st:'',msg:'',n:0};DB.links.push(L)}
+ L.url=url;if(t)L.title=t;save();renderLinks()}
+function markLink(url,o){const L=DB.links.find(x=>x.key==sid(url));if(L){Object.assign(L,{last:Date.now(),st:'ok',msg:''},o);save();renderLinks()}}
+function renderLinks(){const el=$('#lk');if(!el)return;
+ if(!DB.links.length){el.innerHTML='<div class="card empty">Chưa lưu link nào. Dán link rồi bấm Lấy (hoặc Điền), link sẽ được lưu ở đây để app tự cập nhật khi mở.</div>';return}
+ el.innerHTML=`<div class="card"><h3>Link đã lưu</h3><div class="sub" style="margin:0 0 4px">Khi mở app, chỉ những link bật “Tự cập nhật” dưới đây được đọc lại để lấy thông tin của người điền sau.</div>`+
+  DB.links.map(l=>`<div class="pr lk" data-id="${l.id}" style="display:block"><div class="row" style="justify-content:space-between;align-items:flex-start"><div style="min-width:0"><b style="word-break:break-word">${esc(l.title||('Bảng …'+l.key.split('#')[0].slice(-6)))}</b>
+   <small>Cập nhật: ${ago(l.last)}${l.n?' · '+l.n+' người':''}</small>${l.st=='bad'?`<small class="t-bad">${esc(l.msg||'Lỗi')}</small>`:''}</div>${l.st=='bad'?chip('bad','Lỗi'):l.last?chip('ok','Đã lấy'):''}</div>
+   <label class="chk"><input type="checkbox" data-auto ${l.auto?'checked':''}> Tự cập nhật khi mở app</label>
+   <div class="row" style="margin-top:8px"><button class="btn gh" data-a="use" style="flex:1;padding:8px 10px;font-size:13px">Dùng link</button><button class="btn gh" data-a="sync" style="flex:1;padding:8px 10px;font-size:13px">Cập nhật</button><button class="btn dng" data-a="del" style="padding:8px 12px;font-size:13px">Xóa</button></div></div>`).join('')+
+  `<div class="row btns"><button class="btn" data-a="all">Cập nhật tất cả ngay</button></div></div>`}
+async function syncLink(l){const S=await fetchSheet(l.url),A=analyze(S.V);
+ if(!A)throw new Error('Không thấy cột "Họ và tên" trong bảng');
+ const o={added:0,changed:0,created:0,newF:0};
+ A.cols.forEach(c=>{if(!DB.fields.some(f=>f.k==c.k)){DB.fields.push({k:c.k,label:c.label});o.newF++}});
+ for(const{r,name}of A.rows){let p=findPerson(name);if(!p){p={id:uid(),name,data:{}};DB.people.push(p);o.created++}
+  A.cols.forEach(c=>{const v=String(S.V[r][c.c]??'').trim();if(!v)return;const old=p.data[c.k];if(old===v)return;if(old===undefined)o.added++;else o.changed++;p.data[c.k]=v})}
+ if(S.title)l.title=S.title;Object.assign(l,{last:Date.now(),st:'ok',msg:'',n:A.rows.length});return o}
+async function autoSync(list,manual){
+ if(syncing){if(manual)toast('Đang cập nhật, đợi chút nhé','warn');return}
+ const L=list||DB.links.filter(x=>x.auto);
+ if(!L.length){if(manual)toast('Chưa có link nào để cập nhật','warn');return}
+ syncing=true;lastAuto=Date.now();
+ const rows=[];let add=0,chg=0,np=0,nf=0,fail=0;
+ try{
+  for(const l of L){
+   try{const o=await syncLink(l);add+=o.added;chg+=o.changed;np+=o.created;nf+=o.newF;
+    if(o.added||o.changed||o.created||o.newF)rows.push({name:l.title||'Bảng Google Sheets',st:'ok',detail:[o.added&&`+${o.added} ô mới`,o.changed&&`${o.changed} ô đổi`,o.created&&`${o.created} người mới`,o.newF&&`${o.newF} mục mới`].filter(Boolean).join(' · ')})}
+   catch(e){fail++;l.st='bad';l.msg=e.message||'Không đọc được bảng'}
+  }
+  save();renderLinks();if(cur=='people')renderPeople();
+  if(rows.length){
+   addReport({type:'import',title:'Tự cập nhật từ link đã lưu',rows,extra:`+${add} ô mới · ${chg} ô đổi · ${np} người mới`});
+   if(manual)toast(`Đã cập nhật: +${add} ô mới, ${chg} ô đổi`,'ok');
+   if(DB.cfg.auto&&linked())driveSync().catch(()=>{})}
+  else if(manual)toast(fail?'Có link không đọc được, xem trong danh sách':'Chưa có gì mới','warn')
+ }finally{syncing=false}}
 /* ---- Mục 1: lấy thông tin ---- */
 async function runImport(){const link=$('#i-link').value.trim();if(!link)return toast('Dán link bảng vào trước nhé','warn');
  if(!start('i'))return;DB.cfg.li=link;save();
- try{live('i','Đang tải bảng…',.03);const S=await fetchSheet(link),el=$('#i-sheet');mkSheet(el,S.V);
+ try{live('i','Đang tải bảng…',.03);const S=await fetchSheet(link),el=$('#i-sheet');mkSheet(el,S.V);saveLink(link,S);
   const A=analyze(S.V);if(!A)throw new Error('Không thấy cột "Họ và tên" trong 25 dòng đầu của bảng');
   const nf=[];A.cols.forEach(c=>{if(!DB.fields.some(f=>f.k==c.k)){DB.fields.push({k:c.k,label:c.label});nf.push(c.label)}});
   const N=A.rows.length,dl=Math.max(15,Math.min(140,3500/Math.max(N,1)));let created=0;
@@ -243,15 +311,15 @@ async function runImport(){const link=$('#i-link').value.trim();if(!link)return 
     if(p&&p.data[c.k]===v){okc++;td&&td.classList.add('ok')}else{bad.push(c.label);td&&td.classList.add('bad')}});
    rows.push(!p||bad.length?{name,st:'bad',detail:'Lệch: '+(bad.join(', ')||'không thấy trong app')}:tot?{name,st:'ok',detail:`${okc}/${tot} mục khớp`}:{name,st:'warn',detail:'Bảng chưa có thông tin của người này'});await sleep(8)}
   let drv='';if(DB.cfg.auto&&linked()){try{const d=await driveSync();drv=d.ok?' · Drive: đã lưu và khớp':' · Drive: lưu nhưng chưa khớp'}catch(e){drv=' · Drive lỗi: '+e.message}}
-  renderRes('i',rows);live('i',`Xong. Đã kiểm tra ${N} người`,1,'');
-  addReport({type:'import',title:S.title||'Bảng Google Sheets',rows,extra:`Người mới: ${created} · Mục mới: ${nf.length}${drv}`})
+  renderRes('i',rows);markLink(link,{n:N});live('i',`Xong. Đã kiểm tra ${N} người<small>Mục đọc được: ${esc(A.cols.map(c=>c.label).join(', '))}</small>`,1,'');
+  addReport({type:'import',title:S.title||'Bảng Google Sheets',rows,extra:`Người mới: ${created} · Mục mới: ${nf.length}${drv} · Mục đọc được: ${A.cols.map(c=>c.label).join(', ')}`})
  }catch(e){fail('i',e)}finally{end('i')}}
 /* ---- Mục 2: tự động điền ---- */
 async function runFill(){const link=$('#f-link').value.trim();if(!link)return toast('Dán link bảng cần điền','warn');
  if(!linked()){toast('Cần đăng nhập ở mục Drive để ghi vào bảng','warn');return go('drive')}
  if(!DB.people.length)return toast('Chưa có thông tin nào được lưu','warn');
  if(!start('f'))return;DB.cfg.lf=link;save();
- try{live('f','Đang tải bảng…',.03);const S=await fetchSheet(link),el=$('#f-sheet');mkSheet(el,S.V);
+ try{live('f','Đang tải bảng…',.03);const S=await fetchSheet(link),el=$('#f-sheet');mkSheet(el,S.V);saveLink(link,S);
   const A=analyze(S.V);if(!A)throw new Error('Không thấy cột "Họ và tên" trong 25 dòng đầu của bảng');
   const over=$('#f-over').checked,N=A.rows.length,rows=[],written=[];
   for(let n=0;n<N;n++){const{r,name}=A.rows[n];focusRow(el,r);live('f',`Đang điền: <b>${esc(name)}</b>`,(n+1)/N,`${n+1}/${N} người`);
@@ -270,7 +338,7 @@ async function runFill(){const link=$('#f-link').value.trim();if(!link)return to
   if(written.length){live('f','Đang đọc lại bảng để kiểm tra…',1,`${written.length} ô`);const back=(await gs('read',{id:S.id,gid:S.gid})).values;
    written.forEach(x=>{const got=String((back[x.ri]||[])[x.ci]??'').trim(),td=cell(el,x.ri,x.ci);td&&td.classList.remove('fill');
     if(got===x.v)td&&td.classList.add('ok');else{td&&td.classList.add('bad');x.row.st='bad';x.row.detail+=` · KHÔNG KHỚP ${x.label} (bảng đang có "${got}")`}})}
-  renderRes('f',rows);live('f',`Xong. Đã điền ${written.length} ô cho ${N} người`,1,'');
+  renderRes('f',rows);live('f',`Xong. Đã điền ${written.length} ô cho ${N} người<small>Mục đọc được: ${esc(A.cols.map(c=>c.label).join(', '))}</small>`,1,'');
   addReport({type:'fill',title:S.title||'Bảng Google Sheets',rows,extra:`Đã điền ${written.length} ô`+(over?' · chế độ ghi đè':'')})
  }catch(e){fail('f',e)}finally{end('f')}}
 /* ---- Mục 4: thông tin ---- */
@@ -298,7 +366,7 @@ function openFields(){modal(`<h3>Các mục thông tin</h3>`+(DB.fields.map(f=>`
   DB.fields=DB.fields.filter(f=>f.k!=k);DB.people.forEach(p=>delete p.data[k]);afterEdit('Đã xóa mục')})}
 function afterEdit(m){save();closeM();renderPeople();toast(m,'ok');if(DB.cfg.auto&&linked())driveSync().then(d=>toast(d.ok?'Đã lưu lên Drive và khớp':'Drive chưa khớp',d.ok?'ok':'warn')).catch(e=>toast('Drive lỗi: '+e.message,'bad'))}
 /* ---- Mục 5: Drive ---- */
-async function driveSync(rep){const data={v:1,fields:DB.fields,people:DB.people};const s=await gs('save',{data}),l=await gs('load');
+async function driveSync(rep){const data={v:1,fields:DB.fields,people:DB.people,links:DB.links.map(l=>({id:l.id,key:l.key,url:l.url,auto:l.auto,title:l.title}))};const s=await gs('save',{data}),l=await gs('load');
  const L=(l.data&&l.data.people)||[],bad=DB.people.filter(p=>!deepEq(p,L.find(x=>x.id==p.id))).map(p=>p.name);
  const ok=!bad.length&&L.length==DB.people.length&&deepEq(data.fields,l.data.fields);
  DB.quota=l.quota||s.quota;DB.last={t:Date.now(),ok,n:DB.people.length,size:l.size};save();
@@ -306,7 +374,7 @@ async function driveSync(rep){const data={v:1,fields:DB.fields,people:DB.people}
  if(cur=='drive')renderDrive();return{ok,bad}}
 async function driveLoad(){const l=await gs('load');if(!l.data||!l.data.people)return toast('Trên Drive chưa có dữ liệu','warn');
  if(!confirm(`Thay dữ liệu trong app bằng bản trên Drive (${l.data.people.length} người)?`))return;
- DB.fields=l.data.fields||[];DB.people=l.data.people;DB.quota=l.quota;save();renderDrive();toast('Đã tải từ Drive','ok')}
+ DB.fields=l.data.fields||[];DB.people=l.data.people;if(Array.isArray(l.data.links))DB.links=l.data.links.map(x=>({last:0,st:'',msg:'',n:0,...x}));DB.quota=l.quota;save();renderDrive();renderLinks();toast('Đã tải từ Drive','ok')}
 function quotaHTML(){const q=DB.quota;if(!q)return '<div class="hint">Chưa có số liệu. Kết nối rồi bấm Kiểm tra.</div>';
  const unl=!(q.limit>0),pct=unl?4:Math.min(100,q.used/q.limit*100);
  return `<div class="big">${unl?'Không giới hạn':fmtB(q.limit-q.used)}<small>${unl?'':' còn trống'}</small></div><div class="bar"><b style="width:${pct}%"></b></div><div class="sub">Đã dùng ${fmtB(q.used)}${unl?'':' / '+fmtB(q.limit)}</div>`}
@@ -339,7 +407,7 @@ async function checkUpdate(manual){
 function pane(p,btn,hint,extra){return `<div class="card"><label>Link bảng Google Sheets</label><div class="row"><input class="in" id="${p}-link" placeholder="Dán link bảng vào đây" inputmode="url" autocomplete="off"><button class="btn" id="${p}-go">${btn}</button></div>${extra||''}<div class="hint">${hint}</div></div>
 <div class="card" id="${p}-live" hidden><div class="msg" id="${p}-msg"></div><div class="bar"><b id="${p}-bar"></b></div><div class="sub" id="${p}-cnt" style="margin:0"></div><div class="sheet" id="${p}-sheet"></div></div>
 <div class="card" id="${p}-out" hidden><h3>Kết quả kiểm tra</h3><div class="chips" id="${p}-sum"></div><div id="${p}-res"></div></div>`}
-$('#t-import').innerHTML=pane('i','Lấy','Bảng cần mở quyền “Bất kỳ ai có link”, hoặc đăng nhập ở mục Drive. Mục như CCCD, SĐT được tự thêm vào app.');
+$('#t-import').innerHTML=pane('i','Lấy','Bảng cần mở quyền “Bất kỳ ai có link”, hoặc đăng nhập ở mục Drive. Mục như CCCD, SĐT được tự thêm vào app.')+'<div id="lk"></div>';
 $('#t-fill').innerHTML=pane('f','Điền','Ghi vào bảng cần đăng nhập (mục Drive). Mặc định chỉ điền ô trống.','<label class="chk"><input type="checkbox" id="f-over"> Ghi đè cả ô đã có dữ liệu</label>');
 $('#i-link').value=DB.cfg.li||'';$('#f-link').value=DB.cfg.lf||'';
 $('#i-go').onclick=runImport;$('#f-go').onclick=runFill;
@@ -348,6 +416,14 @@ document.querySelectorAll('#nav button').forEach(b=>b.onclick=()=>go(b.dataset.t
 $('#s-q').oninput=renderPeople;$('#p-add').onclick=()=>openEdit();$('#p-fld').onclick=openFields;
 $('#p-list').onclick=e=>{const c=e.target.closest('.pc');c&&openEdit(c.dataset.id)};
 $('#modal').onclick=e=>{if(e.target.id=='modal')closeM()};
-go('import');badge();setTimeout(()=>checkUpdate(false),1500);
+$('#lk').onclick=e=>{const b=e.target.closest('button[data-a]');if(!b)return;const w=b.closest('.lk'),a=b.dataset.a;
+ if(a=='all')return autoSync(DB.links,true);
+ const l=w&&DB.links.find(x=>x.id==w.dataset.id);if(!l)return;
+ if(a=='sync')autoSync([l],true);
+ else if(a=='use'){$('#i-link').value=l.url;$('#f-link').value=l.url;toast('Đã dán link vào ô Lấy và ô Điền','ok')}
+ else if(a=='del'&&confirm('Bỏ link này khỏi danh sách?\n\nThông tin đã lấy về vẫn giữ trong app.')){DB.links=DB.links.filter(x=>x.id!=l.id);save();renderLinks()}};
+$('#lk').onchange=e=>{if(e.target.hasAttribute('data-auto')){const w=e.target.closest('.lk'),l=w&&DB.links.find(x=>x.id==w.dataset.id);if(l){l.auto=e.target.checked;save()}}};
+go('import');badge();renderLinks();setTimeout(()=>checkUpdate(false),1500);setTimeout(()=>autoSync(),1200);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&Date.now()-lastAuto>600000)autoSync()});
 if(linked())gs('ping').then(j=>{DB.quota=j.quota;save();if(cur=='drive')renderDrive()}).catch(()=>{});
 </script></body></html>
